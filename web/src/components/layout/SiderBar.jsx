@@ -39,6 +39,7 @@ const routerMap = {
   user: '/console/user',
   subscription: '/console/subscription',
   log: '/console/log',
+  report: '/console/report',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   about: '/about',
@@ -90,6 +91,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/log',
       },
       {
+        text: t('用量报表'),
+        itemKey: 'report',
+        to: '/report',
+      },
+      {
         text: t('绘图日志'),
         itemKey: 'midjourney',
         to: '/midjourney',
@@ -124,11 +130,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
   const financeItems = useMemo(() => {
     const items = [
-      {
-        text: t('钱包管理'),
-        itemKey: 'topup',
-        to: '/topup',
-      },
       {
         text: t('个人设置'),
         itemKey: 'personal',

@@ -1,0 +1,72 @@
+# 生产环境 Docker Compose 配置
+# 使用本地 MySQL + Docker Redis
+# 启动: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  new-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-gateway
+    restart: always
+    command: --log-dir /app/logs
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      # 本地 MySQL 连接（host.docker.internal 指向宿主机）
+      - SQL_DSN=${MYSQL_USER:-root}:${MYSQL_PASSWORD:-123456}@tcp(host.docker.internal:3306)/new_api?parseTime=true
+      # Redis 连接
+      - REDIS_CONN_STRING=redis://redis
+      - TZ=Asia/Shanghai
+      # 功能开关
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      # 安全配置（生产环境必须修改）
+      - SESSION_SECRET=${SESSION_SECRET:-change_me_to_random_string}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_started
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-gateway-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - new-api
+    networks:
+      - ai-gateway-network
+
+volumes:
+  redis_data:
+
+networks:
+  ai-gateway-network:
+    driver: bridge

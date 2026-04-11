@@ -55,6 +55,8 @@ type CustomOAuthProvider struct {
 	UsernameField    string `json:"username_field" gorm:"type:varchar(128);default:'preferred_username'"` // Username field path
 	DisplayNameField string `json:"display_name_field" gorm:"type:varchar(128);default:'name'"`           // Display name field path
 	EmailField       string `json:"email_field" gorm:"type:varchar(128);default:'email'"`                 // Email field path
+	PhoneField       string `json:"phone_field" gorm:"type:varchar(128);default:''"`                      // Phone field path, e.g., "phone", "mobile"
+	GroupField       string `json:"group_field" gorm:"type:varchar(128);default:''"`                      // Group/department field path, e.g., "department", "org.name"
 
 	// Advanced options
 	WellKnown           string `json:"well_known" gorm:"type:varchar(512)"`            // OIDC discovery endpoint (optional)

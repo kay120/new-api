@@ -259,6 +259,17 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	if oauthUser.Email != "" {
 		user.Email = oauthUser.Email
 	}
+
+	// Set group from OAuth user info (e.g., department)
+	if group, ok := oauthUser.Extra["group"].(string); ok && group != "" {
+		user.Group = group
+	}
+
+	// Set phone from OAuth user info
+	if phone, ok := oauthUser.Extra["phone"].(string); ok && phone != "" {
+		user.Phone = phone
+	}
+
 	user.Role = common.RoleCommonUser
 	user.Status = common.UserStatusEnabled
 

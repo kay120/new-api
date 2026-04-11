@@ -243,6 +243,8 @@ func (p *GenericOAuthProvider) GetUserInfo(ctx context.Context, token *OAuthToke
 	username := gjson.Get(bodyStr, p.config.UsernameField).String()
 	displayName := gjson.Get(bodyStr, p.config.DisplayNameField).String()
 	email := gjson.Get(bodyStr, p.config.EmailField).String()
+	group := gjson.Get(bodyStr, p.config.GroupField).String()
+	phone := gjson.Get(bodyStr, p.config.PhoneField).String()
 
 	// If user ID field returns a number, convert it
 	if userId == "" {
@@ -279,14 +281,22 @@ func (p *GenericOAuthProvider) GetUserInfo(ctx context.Context, token *OAuthToke
 		}
 	}
 
+	extra := map[string]any{
+		"provider": p.config.Slug,
+	}
+	if group != "" {
+		extra["group"] = group
+	}
+	if phone != "" {
+		extra["phone"] = phone
+	}
+
 	return &OAuthUser{
 		ProviderUserID: userId,
 		Username:       username,
 		DisplayName:    displayName,
 		Email:          email,
-		Extra: map[string]any{
-			"provider": p.config.Slug,
-		},
+		Extra:          extra,
 	}, nil
 }
 

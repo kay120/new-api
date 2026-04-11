@@ -375,5 +375,17 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.POST("/:id/extend", controller.ExtendDeployment)
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
+
+		// Report routes
+		reportRoute := apiRouter.Group("/report")
+		reportRoute.Use(middleware.UserAuth())
+		{
+			reportRoute.GET("/overview", controller.GetReportOverview)
+			reportRoute.GET("/by-group", controller.GetReportByGroup)
+			reportRoute.GET("/by-model", controller.GetReportByModel)
+			reportRoute.GET("/by-user", controller.GetReportByUser)
+		}
+		// Export route (no session auth needed, uses UserAuth)
+		apiRouter.GET("/report/export", middleware.UserAuth(), controller.ExportReportCSV)
 	}
 }

@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { lazy, Suspense, useContext, useMemo } from 'react';
-import { Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Route, Routes, useLocation, useParams, Navigate } from 'react-router-dom';
 import Loading from './components/common/ui/Loading';
 import User from './pages/User';
 import { AuthRedirect, PrivateRoute, AdminRoute } from './helpers';
@@ -44,14 +44,28 @@ import Task from './pages/Task';
 import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
+import Report from './pages/Report';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
 import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
 
+// 设计项目组件
+import DesignApp from './components/design/DesignApp';
+import { Dashboard as DesignDashboard } from './design/components/Dashboard';
+import { UserDashboard } from './design/components/UserDashboard';
+import { ApiKeys } from './design/components/ApiKeys';
+import { Models } from './design/components/Models';
+import { Monitoring } from './design/components/Monitoring';
+import { RateLimit } from './design/components/RateLimit';
+import { Billing } from './design/components/Billing';
+import { Settings } from './design/components/Settings';
+import { UserManagement } from './design/components/UserManagement';
+import { useUser } from './design/contexts/UserContext';
+
 const Home = lazy(() => import('./pages/Home'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const OldDashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
@@ -59,6 +73,12 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 function DynamicOAuth2Callback() {
   const { provider } = useParams();
   return <OAuth2Callback type={provider} />;
+}
+
+// 根据用户角色显示不同的仪表板
+function DashboardRouter() {
+  const { isAdmin } = useUser();
+  return isAdmin() ? <DesignDashboard /> : <UserDashboard />;
 }
 
 function App() {
@@ -90,293 +110,136 @@ function App() {
   return (
     <SetupCheck>
       <Routes>
-        <Route
-          path='/'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <Home />
-            </Suspense>
-          }
-        />
+        <Route path='/' element={<Navigate to='/console' replace />} />
         <Route
           path='/setup'
           element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+            <Suspense fallback={<Loading />} key={location.pathname}>
               <Setup />
             </Suspense>
           }
         />
         <Route path='/forbidden' element={<Forbidden />} />
-        <Route
-          path='/console/models'
-          element={
-            <AdminRoute>
-              <ModelPage />
-            </AdminRoute>
-          }
-        />
+
+        {/* ===== 设计项目布局路由 ===== */}
+        <Route path='/console' element={<PrivateRoute><DesignApp /></PrivateRoute>}>
+          <Route index element={<DashboardRouter />} />
+          <Route path='users' element={<UserManagement />} />
+          <Route path='api-keys' element={<ApiKeys />} />
+          <Route path='models' element={<Models />} />
+          <Route path='monitoring' element={<Monitoring />} />
+          <Route path='rate-limit' element={<RateLimit />} />
+          <Route path='billing' element={<Billing />} />
+          <Route path='setting' element={<Settings />} />
+        </Route>
+
+        {/* ===== 保留的旧路由（不在设计项目布局中） ===== */}
         <Route
           path='/console/deployment'
-          element={
-            <AdminRoute>
-              <ModelDeploymentPage />
-            </AdminRoute>
-          }
+          element={<AdminRoute><ModelDeploymentPage /></AdminRoute>}
         />
         <Route
           path='/console/subscription'
-          element={
-            <AdminRoute>
-              <Subscription />
-            </AdminRoute>
-          }
+          element={<AdminRoute><Subscription /></AdminRoute>}
         />
         <Route
           path='/console/channel'
-          element={
-            <AdminRoute>
-              <Channel />
-            </AdminRoute>
-          }
+          element={<AdminRoute><Channel /></AdminRoute>}
         />
         <Route
           path='/console/token'
-          element={
-            <PrivateRoute>
-              <Token />
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><Token /></PrivateRoute>}
         />
         <Route
           path='/console/playground'
-          element={
-            <PrivateRoute>
-              <Playground />
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><Playground /></PrivateRoute>}
         />
         <Route
           path='/console/redemption'
-          element={
-            <AdminRoute>
-              <Redemption />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path='/console/user'
-          element={
-            <AdminRoute>
-              <User />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path='/user/reset'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <PasswordResetConfirm />
-            </Suspense>
-          }
-        />
-        <Route
-          path='/login'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <AuthRedirect>
-                <LoginForm />
-              </AuthRedirect>
-            </Suspense>
-          }
-        />
-        <Route
-          path='/register'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <AuthRedirect>
-                <RegisterForm />
-              </AuthRedirect>
-            </Suspense>
-          }
-        />
-        <Route
-          path='/reset'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <PasswordResetForm />
-            </Suspense>
-          }
-        />
-        <Route
-          path='/oauth/github'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <OAuth2Callback type='github'></OAuth2Callback>
-            </Suspense>
-          }
-        />
-        <Route
-          path='/oauth/discord'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <OAuth2Callback type='discord'></OAuth2Callback>
-            </Suspense>
-          }
-        />
-        <Route
-          path='/oauth/oidc'
-          element={
-            <Suspense fallback={<Loading></Loading>}>
-              <OAuth2Callback type='oidc'></OAuth2Callback>
-            </Suspense>
-          }
-        />
-        <Route
-          path='/oauth/linuxdo'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <OAuth2Callback type='linuxdo'></OAuth2Callback>
-            </Suspense>
-          }
-        />
-        <Route
-          path='/oauth/:provider'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <DynamicOAuth2Callback />
-            </Suspense>
-          }
-        />
-        <Route
-          path='/console/setting'
-          element={
-            <AdminRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Setting />
-              </Suspense>
-            </AdminRoute>
-          }
+          element={<AdminRoute><Redemption /></AdminRoute>}
         />
         <Route
           path='/console/personal'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <PersonalSetting />
-              </Suspense>
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><PersonalSetting /></PrivateRoute>}
         />
         <Route
           path='/console/topup'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <TopUp />
-              </Suspense>
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><TopUp /></PrivateRoute>}
         />
         <Route
           path='/console/log'
-          element={
-            <PrivateRoute>
-              <Log />
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><Log /></PrivateRoute>}
         />
         <Route
-          path='/console'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Dashboard />
-              </Suspense>
-            </PrivateRoute>
-          }
+          path='/console/report'
+          element={<PrivateRoute><Report /></PrivateRoute>}
         />
         <Route
           path='/console/midjourney'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Midjourney />
-              </Suspense>
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><Midjourney /></PrivateRoute>}
         />
         <Route
           path='/console/task'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Task />
-              </Suspense>
-            </PrivateRoute>
-          }
+          element={<PrivateRoute><Task /></PrivateRoute>}
         />
+        <Route
+          path='/console/chat/:id?'
+          element={<Suspense fallback={<Loading />}><Chat /></Suspense>}
+        />
+        <Route
+          path='/user/reset'
+          element={<Suspense fallback={<Loading />}><PasswordResetConfirm /></Suspense>}
+        />
+
+        {/* ===== 认证路由 ===== */}
+        <Route
+          path='/login'
+          element={<Suspense fallback={<Loading />}><AuthRedirect><LoginForm /></AuthRedirect></Suspense>}
+        />
+        <Route
+          path='/register'
+          element={<Suspense fallback={<Loading />}><AuthRedirect><RegisterForm /></AuthRedirect></Suspense>}
+        />
+        <Route
+          path='/reset'
+          element={<Suspense fallback={<Loading />}><PasswordResetForm /></Suspense>}
+        />
+        <Route
+          path='/oauth/github'
+          element={<Suspense fallback={<Loading />}><OAuth2Callback type='github' /></Suspense>}
+        />
+        <Route
+          path='/oauth/discord'
+          element={<Suspense fallback={<Loading />}><OAuth2Callback type='discord' /></Suspense>}
+        />
+        <Route
+          path='/oauth/oidc'
+          element={<Suspense fallback={<Loading />}><OAuth2Callback type='oidc' /></Suspense>}
+        />
+        <Route
+          path='/oauth/linuxdo'
+          element={<Suspense fallback={<Loading />}><OAuth2Callback type='linuxdo' /></Suspense>}
+        />
+        <Route
+          path='/oauth/:provider'
+          element={<Suspense fallback={<Loading />}><DynamicOAuth2Callback /></Suspense>}
+        />
+
+        {/* ===== 公开页面 ===== */}
         <Route
           path='/pricing'
           element={
             pricingRequireAuth ? (
-              <PrivateRoute>
-                <Suspense
-                  fallback={<Loading></Loading>}
-                  key={location.pathname}
-                >
-                  <Pricing />
-                </Suspense>
-              </PrivateRoute>
+              <PrivateRoute><Suspense fallback={<Loading />}><Pricing /></Suspense></PrivateRoute>
             ) : (
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Pricing />
-              </Suspense>
+              <Suspense fallback={<Loading />}><Pricing /></Suspense>
             )
           }
         />
-        <Route
-          path='/about'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <About />
-            </Suspense>
-          }
-        />
-        <Route
-          path='/user-agreement'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <UserAgreement />
-            </Suspense>
-          }
-        />
-        <Route
-          path='/privacy-policy'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <PrivacyPolicy />
-            </Suspense>
-          }
-        />
-        <Route
-          path='/console/chat/:id?'
-          element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <Chat />
-            </Suspense>
-          }
-        />
-        {/* 方便使用chat2link直接跳转聊天... */}
-        <Route
-          path='/chat2link'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Chat2Link />
-              </Suspense>
-            </PrivateRoute>
-          }
-        />
+        <Route path='/about' element={<Suspense fallback={<Loading />}><About /></Suspense>} />
+        <Route path='/user-agreement' element={<Suspense fallback={<Loading />}><UserAgreement /></Suspense>} />
+        <Route path='/privacy-policy' element={<Suspense fallback={<Loading />}><PrivacyPolicy /></Suspense>} />
+        <Route path='/chat2link' element={<PrivateRoute><Suspense fallback={<Loading />}><Chat2Link /></Suspense></PrivateRoute>} />
         <Route path='*' element={<NotFound />} />
       </Routes>
     </SetupCheck>

@@ -67,10 +67,33 @@ const PageLayout = () => {
   const shouldInnerPadding =
     location.pathname.includes('/console') &&
     !location.pathname.startsWith('/console/chat') &&
-    location.pathname !== '/console/playground';
+    location.pathname !== '/console/playground' &&
+    !isDesignRoute;
 
   const isConsoleRoute = location.pathname.startsWith('/console');
-  const showSider = isConsoleRoute && (!isMobile || drawerOpen);
+  // 设计项目布局路由 - 不使用 Semi UI 的 Header 和 Sider
+  const designLayoutRoutes = [
+    '/console',
+    '/console/users',
+    '/console/api-keys',
+    '/console/monitoring',
+    '/console/rate-limit',
+    '/console/billing',
+  ];
+  const useDesignLayout = designLayoutRoutes.some(
+    (r) => location.pathname === r || (r === '/console' && location.pathname.startsWith('/console/') === false && location.pathname === '/console')
+  );
+  // 更精确的匹配
+  const isDesignRoute = location.pathname === '/console' ||
+    location.pathname === '/console/users' ||
+    location.pathname === '/console/api-keys' ||
+    location.pathname === '/console/models' ||
+    location.pathname === '/console/monitoring' ||
+    location.pathname === '/console/rate-limit' ||
+    location.pathname === '/console/billing' ||
+    location.pathname === '/console/setting';
+
+  const showSider = isConsoleRoute && !isDesignRoute && (!isMobile || drawerOpen);
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -143,6 +166,33 @@ const PageLayout = () => {
       }
     }
   }, [i18n, userState?.user?.setting]);
+
+  // 设计项目路由下使用全屏布局，不显示 Semi UI 的 Header/Sider/Footer
+  if (isDesignRoute) {
+    return (
+      <Layout
+        className='app-layout'
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <Content
+          style={{
+            flex: '1 0 auto',
+            overflow: 'hidden',
+            padding: '0',
+            position: 'relative',
+          }}
+        >
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
+        </Content>
+      </Layout>
+    );
+  }
 
   return (
     <Layout

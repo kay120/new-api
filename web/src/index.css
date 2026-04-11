@@ -1,17 +1,8 @@
-/* ==================== Tailwind CSS 配置 ==================== */
-@layer tailwind-base, semi, tailwind-components, tailwind-utils;
+/* ==================== Tailwind CSS 配置 (v4) ==================== */
+@import 'tailwindcss';
 
-@layer tailwind-base {
-  @tailwind base;
-}
-
-@layer tailwind-components {
-  @tailwind components;
-}
-
-@layer tailwind-utils {
-  @tailwind utilities;
-}
+/* 引入设计项目主题变量 */
+@import './design/styles/theme.css';
 
 /* ==================== 全局基础样式 ==================== */
 :root {

@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/common/limiter"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/setting"
 
 	"github.com/gin-gonic/gin"
@@ -190,6 +191,21 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 			successMaxCount = groupSuccessCount
 		}
 
+		// 获取分时段限流配置（用户配置 > 全局默认）
+		timeRateLimit := getTimeBasedRateLimit(c)
+		if timeRateLimit != nil && timeRateLimit.RPM > 0 {
+			// 取分时段 RPM 和现有限制中的更小值
+			scheduleRPM := timeRateLimit.RPM
+			if successMaxCount == 0 || scheduleRPM < successMaxCount {
+				successMaxCount = scheduleRPM
+			}
+		}
+
+		// 将分时段 TPM 限制存入 context，供后续 TPM 限流使用
+		if timeRateLimit != nil && timeRateLimit.TPM > 0 {
+			c.Set("time_rate_limit_tpm", timeRateLimit.TPM)
+		}
+
 		// 根据存储类型选择并执行限流处理器
 		if common.RedisEnabled {
 			redisRateLimitHandler(duration, totalMaxCount, successMaxCount)(c)
@@ -197,4 +213,18 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 			memoryRateLimitHandler(duration, totalMaxCount, successMaxCount)(c)
 		}
 	}
+}
+
+// getTimeBasedRateLimit 获取当前时间段的限流配置
+func getTimeBasedRateLimit(c *gin.Context) *dto.TimeRateLimit {
+	// 优先使用用户级配置
+	userSetting, ok := common.GetContextKeyType[dto.UserSetting](c, constant.ContextKeyUserSetting)
+	if ok && len(userSetting.RateLimitSchedule) > 0 {
+		if rl := setting.GetCurrentTimeRateLimit(userSetting.RateLimitSchedule); rl != nil {
+			return rl
+		}
+	}
+	// 否则使用全局默认配置
+	schedule := setting.GetEffectiveRateLimitSchedule(nil)
+	return setting.GetCurrentTimeRateLimit(schedule)
 }

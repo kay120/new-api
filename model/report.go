@@ -1,0 +1,234 @@
+package model
+
+import (
+	"errors"
+	"time"
+
+	"github.com/QuantumNous/new-api/common"
+)
+
+// GroupStat 按组统计
+type GroupStat struct {
+	Group            string `json:"group"`
+	Quota            int    `json:"quota"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	UserCount        int    `json:"user_count"`
+}
+
+// ModelStat 按模型统计
+type ModelStat struct {
+	ModelName        string `json:"model_name"`
+	Quota            int    `json:"quota"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	UserCount        int    `json:"user_count"`
+}
+
+// UserStat 按用户统计
+type UserStat struct {
+	Username         string `json:"username"`
+	Group            string `json:"group"`
+	Quota            int    `json:"quota"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	ModelCount       int    `json:"model_count"`
+}
+
+// DailyStat 按日统计
+type DailyStat struct {
+	Date         string `json:"date"`
+	Quota        int    `json:"quota"`
+	RequestCount int    `json:"request_count"`
+}
+
+// ReportOverview 报表概览
+type ReportOverview struct {
+	TotalQuota    int         `json:"total_quota"`
+	TotalRequests int         `json:"total_requests"`
+	TotalUsers    int         `json:"total_users"`
+	TotalModels   int         `json:"total_models"`
+	DailyStats    []DailyStat `json:"daily_stats"`
+	TopGroups     []GroupStat `json:"top_groups"`
+	TopModels     []ModelStat `json:"top_models"`
+	TopUsers      []UserStat  `json:"top_users"`
+}
+
+func GetGroupsByReport(startTimestamp int64, endTimestamp int64, groupFilter string) ([]GroupStat, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	query := LOG_DB.Table("logs").
+		Select("logs.group, sum(logs.quota) as quota, count(*) as request_count, sum(logs.prompt_tokens) as prompt_tokens, sum(logs.completion_tokens) as completion_tokens, count(distinct logs.user_id) as user_count").
+		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs.group = ?", groupFilter)
+	}
+
+	query = query.Group("logs.group").Order("quota desc")
+
+	var stats []GroupStat
+	if err := query.Scan(&stats).Error; err != nil {
+		common.SysError("failed to query group stats: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+
+	return stats, nil
+}
+
+func GetModelsByReport(startTimestamp int64, endTimestamp int64, groupFilter string) ([]ModelStat, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	query := LOG_DB.Table("logs").
+		Select("logs.model_name, sum(logs.quota) as quota, count(*) as request_count, sum(logs.prompt_tokens) as prompt_tokens, sum(logs.completion_tokens) as completion_tokens, count(distinct logs.user_id) as user_count").
+		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs.group = ?", groupFilter)
+	}
+
+	query = query.Group("logs.model_name").Order("quota desc")
+
+	var stats []ModelStat
+	if err := query.Scan(&stats).Error; err != nil {
+		common.SysError("failed to query model stats: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+
+	return stats, nil
+}
+
+func GetUsersByReport(startTimestamp int64, endTimestamp int64, groupFilter string, limit int) ([]UserStat, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := LOG_DB.Table("logs").
+		Select("logs.username, logs.group, sum(logs.quota) as quota, count(*) as request_count, sum(logs.prompt_tokens) as prompt_tokens, sum(logs.completion_tokens) as completion_tokens, count(distinct logs.model_name) as model_count").
+		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs.group = ?", groupFilter)
+	}
+
+	query = query.Group("logs.username, logs.group").Order("quota desc").Limit(limit)
+
+	var stats []UserStat
+	if err := query.Scan(&stats).Error; err != nil {
+		common.SysError("failed to query user stats: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+
+	return stats, nil
+}
+
+func GetDailyStatsByReport(startTimestamp int64, endTimestamp int64, groupFilter string) ([]DailyStat, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	type rawDailyStat struct {
+		DateUnix     int64 `json:"date"`
+		Quota        int   `json:"quota"`
+		RequestCount int   `json:"request_count"`
+	}
+
+	query := LOG_DB.Table("logs").
+		Select("(logs.created_at / 86400 * 86400) as date, sum(logs.quota) as quota, count(*) as request_count").
+		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs.group = ?", groupFilter)
+	}
+
+	query = query.Group("(logs.created_at / 86400 * 86400)").Order("date asc")
+
+	var rawStats []rawDailyStat
+	if err := query.Scan(&rawStats).Error; err != nil {
+		common.SysError("failed to query daily stats: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+
+	stats := make([]DailyStat, 0, len(rawStats))
+	for _, r := range rawStats {
+		stats = append(stats, DailyStat{
+			Date:         time.Unix(r.DateUnix, 0).Format("2006-01-02"),
+			Quota:        r.Quota,
+			RequestCount: r.RequestCount,
+		})
+	}
+
+	return stats, nil
+}
+
+func GetReportOverview(startTimestamp int64, endTimestamp int64, groupFilter string) (*ReportOverview, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		now := time.Now()
+		startTimestamp = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+		endTimestamp = now.Unix()
+	}
+
+	var overview ReportOverview
+
+	// 总计
+	type totalResult struct {
+		TotalQuota    int
+		TotalRequests int
+		TotalUsers    int
+		TotalModels   int
+	}
+
+	query := LOG_DB.Table("logs").
+		Select("sum(logs.quota) as total_quota, count(*) as total_requests, count(distinct logs.user_id) as total_users, count(distinct logs.model_name) as total_models").
+		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs.group = ?", groupFilter)
+	}
+
+	var total totalResult
+	if err := query.Scan(&total).Error; err != nil {
+		common.SysError("failed to query overview total: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+
+	overview.TotalQuota = total.TotalQuota
+	overview.TotalRequests = total.TotalRequests
+	overview.TotalUsers = total.TotalUsers
+	overview.TotalModels = total.TotalModels
+
+	// 每日趋势
+	dailyStats, _ := GetDailyStatsByReport(startTimestamp, endTimestamp, groupFilter)
+	overview.DailyStats = dailyStats
+
+	// Top groups
+	topGroups, _ := GetGroupsByReport(startTimestamp, endTimestamp, "")
+	if len(topGroups) > 10 {
+		topGroups = topGroups[:10]
+	}
+	overview.TopGroups = topGroups
+
+	// Top models
+	topModels, _ := GetModelsByReport(startTimestamp, endTimestamp, groupFilter)
+	if len(topModels) > 10 {
+		topModels = topModels[:10]
+	}
+	overview.TopModels = topModels
+
+	// Top users
+	topUsers, _ := GetUsersByReport(startTimestamp, endTimestamp, groupFilter, 10)
+	overview.TopUsers = topUsers
+
+	return &overview, nil
+}

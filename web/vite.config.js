@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import react from '@vitejs/plugin-react';
 import { defineConfig, transformWithEsbuild } from 'vite';
 import pkg from '@douyinfe/vite-plugin-semi';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 const { vitePluginSemi } = pkg;
@@ -29,12 +30,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@douyinfe/semi-ui/dist/css/semi.css': path.resolve(__dirname, './node_modules/@douyinfe/semi-ui/dist/css/semi.css'),
     },
   },
   plugins: [
     codeInspectorPlugin({
       bundler: 'vite',
     }),
+    tailwindcss(),
     {
       name: 'treat-js-files-as-jsx',
       async transform(code, id) {

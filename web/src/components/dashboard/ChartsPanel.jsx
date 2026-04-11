@@ -1,26 +1,36 @@
-/*
-Copyright (C) 2025 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
-
 import React from 'react';
-import { Card, Tabs, TabPane } from '@douyinfe/semi-ui';
-import { PieChart } from 'lucide-react';
+import { Tabs, TabPane } from '@douyinfe/semi-ui';
 import { VChart } from '@visactor/react-vchart';
+import { BarChart3, TrendingUp, PieChart, Trophy, Users, Activity } from 'lucide-react';
+
+const TAB_CONFIG = [
+  { key: '1', label: '消耗分布', icon: BarChart3 },
+  { key: '2', label: '调用趋势', icon: TrendingUp },
+  { key: '3', label: '次数分布', icon: PieChart },
+  { key: '4', label: '次数排行', icon: Trophy },
+  { key: '5', label: '用户排行', icon: Users, admin: true },
+  { key: '6', label: '用户趋势', icon: Activity, admin: true },
+];
+
+const specMap = {
+  '1': 'spec_line',
+  '2': 'spec_model_line',
+  '3': 'spec_pie',
+  '4': 'spec_rank_bar',
+  '5': 'spec_user_rank',
+  '6': 'spec_user_trend',
+};
+
+const ChartCard = ({ title, spec, CHART_CONFIG }) => (
+  <div className='bg-white rounded-lg border border-gray-100 overflow-hidden'>
+    <div className='px-4 py-3 border-b border-gray-50'>
+      <h3 className='text-sm font-medium text-gray-700'>{title}</h3>
+    </div>
+    <div className='h-80 p-2'>
+      <VChart spec={spec} option={CHART_CONFIG} />
+    </div>
+  </div>
+);
 
 const ChartsPanel = ({
   activeChartTab,
@@ -32,63 +42,49 @@ const ChartsPanel = ({
   spec_user_rank,
   spec_user_trend,
   isAdminUser,
-  CARD_PROPS,
   CHART_CONFIG,
-  FLEX_CENTER_GAP2,
-  hasApiInfoPanel,
   t,
 }) => {
+  const specs = { spec_line, spec_model_line, spec_pie, spec_rank_bar, spec_user_rank, spec_user_trend };
+
+  const visibleTabs = TAB_CONFIG.filter(
+    (tab) => !tab.admin || isAdminUser
+  );
+
+  const activeTabConfig = TAB_CONFIG.find((tab) => tab.key === activeChartTab);
+  const activeSpec = specs[specMap[activeChartTab]];
+
   return (
-    <Card
-      {...CARD_PROPS}
-      className={`!rounded-2xl ${hasApiInfoPanel ? 'lg:col-span-3' : ''}`}
-      title={
-        <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between w-full gap-3'>
-          <div className={FLEX_CENTER_GAP2}>
-            <PieChart size={16} />
-            {t('模型数据分析')}
-          </div>
-          <Tabs
-            type='slash'
-            activeKey={activeChartTab}
-            onChange={setActiveChartTab}
-          >
-            <TabPane tab={<span>{t('消耗分布')}</span>} itemKey='1' />
-            <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
-            <TabPane tab={<span>{t('调用次数分布')}</span>} itemKey='3' />
-            <TabPane tab={<span>{t('调用次数排行')}</span>} itemKey='4' />
-            {isAdminUser && (
-              <TabPane tab={<span>{t('用户消耗排行')}</span>} itemKey='5' />
-            )}
-            {isAdminUser && (
-              <TabPane tab={<span>{t('用户消耗趋势')}</span>} itemKey='6' />
-            )}
-          </Tabs>
-        </div>
-      }
-      bodyStyle={{ padding: 0 }}
-    >
-      <div className='h-96 p-2'>
-        {activeChartTab === '1' && (
-          <VChart spec={spec_line} option={CHART_CONFIG} />
-        )}
-        {activeChartTab === '2' && (
-          <VChart spec={spec_model_line} option={CHART_CONFIG} />
-        )}
-        {activeChartTab === '3' && (
-          <VChart spec={spec_pie} option={CHART_CONFIG} />
-        )}
-        {activeChartTab === '4' && (
-          <VChart spec={spec_rank_bar} option={CHART_CONFIG} />
-        )}
-        {activeChartTab === '5' && isAdminUser && (
-          <VChart spec={spec_user_rank} option={CHART_CONFIG} />
-        )}
-        {activeChartTab === '6' && isAdminUser && (
-          <VChart spec={spec_user_trend} option={CHART_CONFIG} />
-        )}
+    <div className='space-y-3'>
+      {/* Tab 导航 */}
+      <div className='flex items-center gap-1 bg-gray-50 rounded-lg p-1'>
+        {visibleTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeChartTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveChartTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                isActive
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Icon size={13} />
+              {t(tab.label)}
+            </button>
+          );
+        })}
       </div>
-    </Card>
+
+      {/* 图表 */}
+      <ChartCard
+        title={t(activeTabConfig?.label || '')}
+        spec={activeSpec}
+        CHART_CONFIG={CHART_CONFIG}
+      />
+    </div>
   );
 };
 
