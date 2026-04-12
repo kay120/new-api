@@ -451,6 +451,21 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 					newAPIError: types.NewOpenAIError(fmt.Errorf("stream error"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
 				}
 			}
+			// 记录测试日志（流式快速检测，估算最小 token 用量）
+			tok := time.Now()
+			ms := tok.Sub(tik).Milliseconds()
+			model.RecordConsumeLog(c, 1, model.RecordConsumeLogParams{
+				ChannelId:        channel.Id,
+				PromptTokens:     10,
+				CompletionTokens: 1,
+				ModelName:        info.OriginModelName,
+				TokenName:        "模型测试",
+				Quota:            0,
+				Content:          "模型测试(快速)",
+				UseTimeSeconds:   int(ms / 1000),
+				IsStream:         true,
+				Group:            info.UsingGroup,
+			})
 			return testResult{context: c}
 		}
 		if readErr != nil {

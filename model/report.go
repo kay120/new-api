@@ -141,9 +141,9 @@ func GetDailyStatsByReport(startTimestamp int64, endTimestamp int64, groupFilter
 	}
 
 	type rawDailyStat struct {
-		DateUnix     int64 `json:"date"`
-		Quota        int   `json:"quota"`
-		RequestCount int   `json:"request_count"`
+		DateUnix     int64 `gorm:"column:date"`
+		Quota        int   `gorm:"column:quota"`
+		RequestCount int   `gorm:"column:request_count"`
 	}
 
 	query := LOG_DB.Table("logs").
