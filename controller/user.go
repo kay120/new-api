@@ -519,12 +519,57 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
 	var models []string
-	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
-			if !common.StringsContains(models, g) {
-				models = append(models, g)
+	// 如果管理员分配了 allowed_channels（格式: "渠道ID:模型,渠道ID:*"），推导可用模型
+	if user.AllowedChannels != "" {
+		// 解析为 map[channelID][]modelName，"*" 表示该渠道所有模型
+		allowedMap := make(map[int][]string) // channelID → ["model1","model2"] or ["*"]
+		for _, entry := range strings.Split(user.AllowedChannels, ",") {
+			entry = strings.TrimSpace(entry)
+			parts := strings.SplitN(entry, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			chId, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				continue
+			}
+			modelName := strings.TrimSpace(parts[1])
+			allowedMap[chId] = append(allowedMap[chId], modelName)
+		}
+		channels, _ := model.GetAllChannels(0, 0, true, false)
+		for _, ch := range channels {
+			allowedModels, ok := allowedMap[ch.Id]
+			if !ok || ch.Status != 1 {
+				continue
+			}
+			isWildcard := false
+			for _, m := range allowedModels {
+				if m == "*" {
+					isWildcard = true
+					break
+				}
+			}
+			for _, m := range strings.Split(ch.Models, ",") {
+				m = strings.TrimSpace(m)
+				if m == "" {
+					continue
+				}
+				if isWildcard || common.StringsContains(allowedModels, m) {
+					if !common.StringsContains(models, m) {
+						models = append(models, m)
+					}
+				}
+			}
+		}
+	} else {
+		// 未设置则按分组返回所有可用模型
+		groups := service.GetUserUsableGroups(user.Group)
+		for group := range groups {
+			for _, g := range model.GetGroupEnabledModels(group) {
+				if !common.StringsContains(models, g) {
+					models = append(models, g)
+				}
 			}
 		}
 	}

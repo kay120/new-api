@@ -50,7 +50,8 @@ const (
 	ContextKeyUserEmail   ContextKey = "user_email"
 	ContextKeyUserGroup   ContextKey = "user_group"
 	ContextKeyUsingGroup  ContextKey = "group"
-	ContextKeyUserName    ContextKey = "username"
+	ContextKeyUserName        ContextKey = "username"
+	ContextKeyAllowedChannels ContextKey = "allowed_channels"
 
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 

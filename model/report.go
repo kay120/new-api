@@ -147,14 +147,14 @@ func GetDailyStatsByReport(startTimestamp int64, endTimestamp int64, groupFilter
 	}
 
 	query := LOG_DB.Table("logs").
-		Select("(logs.created_at / 86400 * 86400) as date, sum(logs.quota) as quota, count(*) as request_count").
+		Select("(logs.created_at DIV 86400 * 86400) as `date`, sum(logs.quota) as quota, count(*) as request_count").
 		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
 
 	if groupFilter != "" {
 		query = query.Where("logs.group = ?", groupFilter)
 	}
 
-	query = query.Group("(logs.created_at / 86400 * 86400)").Order("date asc")
+	query = query.Group("(logs.created_at DIV 86400 * 86400)").Order("`date` asc")
 
 	var rawStats []rawDailyStat
 	if err := query.Scan(&rawStats).Error; err != nil {

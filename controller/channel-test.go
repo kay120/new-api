@@ -436,6 +436,32 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		}
 	}
 
+	// 流式快速检测：读到第一个有效 chunk 即视为连通成功
+	// 部分思考模型（deepseek-reasoner）不支持关闭思考，只能靠提前终止
+	if isStream && httpResp != nil && httpResp.Body != nil {
+		buf := make([]byte, 512)
+		n, readErr := httpResp.Body.Read(buf)
+		httpResp.Body.Close()
+		if n > 0 {
+			chunk := string(buf[:n])
+			if strings.Contains(chunk, `"error"`) && !strings.Contains(chunk, `"error":null`) && !strings.Contains(chunk, `"error": null`) {
+				return testResult{
+					context:     c,
+					localErr:    fmt.Errorf("%s", strings.TrimSpace(chunk)),
+					newAPIError: types.NewOpenAIError(fmt.Errorf("stream error"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
+				}
+			}
+			return testResult{context: c}
+		}
+		if readErr != nil {
+			return testResult{
+				context:     c,
+				localErr:    fmt.Errorf("stream read: %v", readErr),
+				newAPIError: types.NewOpenAIError(readErr, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError),
+			}
+		}
+	}
+
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
 	if respErr != nil {
 		return testResult{
@@ -654,7 +680,8 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 						Content: "hi",
 					},
 				},
-				MaxTokens: lo.ToPtr(uint(1)),
+				MaxTokens:      lo.ToPtr(uint(1)),
+			EnableThinking: json.RawMessage(`false`),
 			}
 			if isStream {
 				req.StreamOptions = &dto.StreamOptions{IncludeUsage: true}

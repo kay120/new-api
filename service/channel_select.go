@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -156,6 +158,32 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry())
 		if err != nil {
 			return nil, param.TokenGroup, err
+		}
+	}
+	// 如果用户设置了 allowed_channels（格式: "渠道ID:模型,渠道ID:*"），检查渠道+模型组合
+	if channel != nil {
+		allowedChannels := common.GetContextKeyString(param.Ctx, constant.ContextKeyAllowedChannels)
+		if allowedChannels != "" {
+			allowed := false
+			for _, entry := range strings.Split(allowedChannels, ",") {
+				entry = strings.TrimSpace(entry)
+				parts := strings.SplitN(entry, ":", 2)
+				if len(parts) != 2 {
+					continue
+				}
+				chId, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+				if err != nil || chId != channel.Id {
+					continue
+				}
+				modelName := strings.TrimSpace(parts[1])
+				if modelName == "*" || modelName == param.ModelName {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return nil, selectGroup, nil
+			}
 		}
 	}
 	return channel, selectGroup, nil

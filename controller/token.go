@@ -207,8 +207,13 @@ func AddToken(c *gin.Context) {
 		common.SysLog("failed to generate token key: " + err.Error())
 		return
 	}
+	// admin 可以通过 user_id 字段为其他用户创建 Token
+	targetUserId := c.GetInt("id")
+	if token.UserId > 0 && c.GetInt("role") >= 10 {
+		targetUserId = token.UserId
+	}
 	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
+		UserId:             targetUserId,
 		Name:               token.Name,
 		Key:                key,
 		CreatedTime:        common.GetTimestamp(),
