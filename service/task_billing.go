@@ -12,6 +12,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 )
 
 // LogTaskConsumption 记录任务消费日志和统计信息（仅记录，不涉及实际扣费）。
@@ -294,7 +295,12 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	}
 
 	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio * otherMultiplier
-	actualQuota := int(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
+	// Use decimal for precision calculation
+	actualQuotaDecimal := decimal.NewFromInt(int64(totalTokens)).
+		Mul(decimal.NewFromFloat(modelRatio)).
+		Mul(decimal.NewFromFloat(finalGroupRatio)).
+		Mul(decimal.NewFromFloat(otherMultiplier))
+	actualQuota := int(actualQuotaDecimal.Round(0).IntPart())
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason)

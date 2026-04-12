@@ -31,6 +31,7 @@ import (
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 
 	"github.com/gin-gonic/gin"
@@ -470,13 +471,16 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 
 	quota := 0
 	if !priceData.UsePrice {
-		quota = usage.PromptTokens + int(math.Round(float64(usage.CompletionTokens)*priceData.CompletionRatio))
-		quota = int(math.Round(float64(quota) * priceData.ModelRatio))
+		// Use decimal for precision calculation
+		completionQuota := decimal.NewFromInt(int64(usage.CompletionTokens)).Mul(decimal.NewFromFloat(priceData.CompletionRatio)).Round(0)
+		quotaDecimal := decimal.NewFromInt(int64(usage.PromptTokens)).Add(completionQuota)
+		quotaDecimal = quotaDecimal.Mul(decimal.NewFromFloat(priceData.ModelRatio))
+		quota = int(quotaDecimal.Round(0).IntPart())
 		if priceData.ModelRatio != 0 && quota <= 0 {
 			quota = 1
 		}
 	} else {
-		quota = int(priceData.ModelPrice * common.QuotaPerUnit)
+		quota = int(decimal.NewFromFloat(priceData.ModelPrice).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).Round(0).IntPart())
 	}
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()

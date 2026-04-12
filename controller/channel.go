@@ -68,6 +68,30 @@ func clearChannelInfo(channel *model.Channel) {
 	}
 }
 
+// maskChannelKey 对 API Key 进行脱敏处理：前后显示4个字符，中间用 *** 隐藏
+func maskChannelKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	keys := strings.Split(strings.TrimSpace(key), "\n")
+	var maskedKeys []string
+	for _, k := range keys {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		if len(k) <= 8 {
+			maskedKeys = append(maskedKeys, "***")
+		} else {
+			maskedKeys = append(maskedKeys, k[:4]+"***"+k[len(k)-4:])
+		}
+	}
+	if len(maskedKeys) == 0 {
+		return ""
+	}
+	return strings.Join(maskedKeys, ", ")
+}
+
 func GetAllChannels(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	channelData := make([]*model.Channel, 0)
@@ -98,7 +122,7 @@ func GetAllChannels(c *gin.Context) {
 			if tag == nil || *tag == "" {
 				continue
 			}
-			tagChannels, err := model.GetChannelsByTag(*tag, idSort, false)
+			tagChannels, err := model.GetChannelsByTag(*tag, idSort, true)
 			if err != nil {
 				continue
 			}
@@ -136,7 +160,7 @@ func GetAllChannels(c *gin.Context) {
 			order = "id desc"
 		}
 
-		err := baseQuery.Order(order).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("key").Find(&channelData).Error
+		err := baseQuery.Order(order).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&channelData).Error
 		if err != nil {
 			common.SysError("failed to get channels: " + err.Error())
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
@@ -146,6 +170,8 @@ func GetAllChannels(c *gin.Context) {
 
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
+		// 对 API Key 进行脱敏处理：前后显示4个字符，中间隐藏
+		datum.Key = maskChannelKey(datum.Key)
 	}
 
 	countQuery := model.DB.Model(&model.Channel{})

@@ -2,7 +2,8 @@ package common
 
 import (
 	"crypto/tls"
-	//"os"
+	"os"
+
 	//"strconv"
 	"sync"
 	"time"
@@ -125,6 +126,8 @@ var BatchUpdateEnabled = false
 var BatchUpdateInterval int
 
 var RelayTimeout int // unit is second
+
+var EnableDynamicChannelSelection = os.Getenv("DYNAMIC_CHANNEL_SELECTION") == "true"
 
 var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int

@@ -232,10 +232,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		}
 	}
 
-	// User doesn't exist, create new user if registration is enabled
-	if !common.RegisterEnabled {
-		return nil, &OAuthRegistrationDisabledError{}
-	}
+	// OAuth 用户已通过身份提供商认证，允许自动创建账号（不受 RegisterEnabled 限制）
 
 	// Set up new user
 	user.Username = provider.GetProviderPrefix() + strconv.Itoa(model.GetMaxUserId()+1)

@@ -12,7 +12,8 @@ import (
 var defaultGroupRatio = map[string]float64{
 	"default": 1,
 	"vip":     1,
-	"svip":    1,
+	"svip":    0.8,
+	"test":    1,
 }
 
 var groupRatioMap = types.NewRWMap[string, float64]()
@@ -20,6 +21,9 @@ var groupRatioMap = types.NewRWMap[string, float64]()
 var defaultGroupGroupRatio = map[string]map[string]float64{
 	"vip": {
 		"edit_this": 0.9,
+	},
+	"svip": {
+		"edit_this": 0.8,
 	},
 }
 
@@ -29,6 +33,10 @@ var defaultGroupSpecialUsableGroup = map[string]map[string]string{
 	"vip": {
 		"append_1":   "vip_special_group_1",
 		"-:remove_1": "vip_removed_group_1",
+	},
+	"svip": {
+		"append_1":   "svip_special_group_1",
+		"-:remove_1": "svip_removed_group_1",
 	},
 }
 

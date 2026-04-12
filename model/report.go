@@ -47,14 +47,16 @@ type DailyStat struct {
 
 // ReportOverview 报表概览
 type ReportOverview struct {
-	TotalQuota    int         `json:"total_quota"`
-	TotalRequests int         `json:"total_requests"`
-	TotalUsers    int         `json:"total_users"`
-	TotalModels   int         `json:"total_models"`
-	DailyStats    []DailyStat `json:"daily_stats"`
-	TopGroups     []GroupStat `json:"top_groups"`
-	TopModels     []ModelStat `json:"top_models"`
-	TopUsers      []UserStat  `json:"top_users"`
+	TotalQuota            int         `json:"total_quota"`
+	TotalRequests         int         `json:"total_requests"`
+	TotalUsers            int         `json:"total_users"`
+	TotalModels           int         `json:"total_models"`
+	TotalPromptTokens     int         `json:"total_prompt_tokens"`
+	TotalCompletionTokens int         `json:"total_completion_tokens"`
+	DailyStats            []DailyStat `json:"daily_stats"`
+	TopGroups             []GroupStat `json:"top_groups"`
+	TopModels             []ModelStat `json:"top_models"`
+	TopUsers              []UserStat  `json:"top_users"`
 }
 
 func GetGroupsByReport(startTimestamp int64, endTimestamp int64, groupFilter string) ([]GroupStat, error) {
@@ -183,14 +185,16 @@ func GetReportOverview(startTimestamp int64, endTimestamp int64, groupFilter str
 
 	// 总计
 	type totalResult struct {
-		TotalQuota    int
-		TotalRequests int
-		TotalUsers    int
-		TotalModels   int
+		TotalQuota            int
+		TotalRequests         int
+		TotalUsers            int
+		TotalModels           int
+		TotalPromptTokens     int
+		TotalCompletionTokens int
 	}
 
 	query := LOG_DB.Table("logs").
-		Select("sum(logs.quota) as total_quota, count(*) as total_requests, count(distinct logs.user_id) as total_users, count(distinct logs.model_name) as total_models").
+		Select("sum(logs.quota) as total_quota, count(*) as total_requests, count(distinct logs.user_id) as total_users, count(distinct logs.model_name) as total_models, sum(logs.prompt_tokens) as total_prompt_tokens, sum(logs.completion_tokens) as total_completion_tokens").
 		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
 
 	if groupFilter != "" {
@@ -207,6 +211,8 @@ func GetReportOverview(startTimestamp int64, endTimestamp int64, groupFilter str
 	overview.TotalRequests = total.TotalRequests
 	overview.TotalUsers = total.TotalUsers
 	overview.TotalModels = total.TotalModels
+	overview.TotalPromptTokens = total.TotalPromptTokens
+	overview.TotalCompletionTokens = total.TotalCompletionTokens
 
 	// 每日趋势
 	dailyStats, _ := GetDailyStatsByReport(startTimestamp, endTimestamp, groupFilter)

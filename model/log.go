@@ -18,9 +18,9 @@ import (
 
 type Log struct {
 	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
-	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
-	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
+	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1;index:idx_user_created_type,priority:1"`
+	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type;index:idx_user_created_type,priority:2"`
+	Type             int    `json:"type" gorm:"index:idx_created_at_type;index:idx_user_created_type,priority:3"`
 	Content          string `json:"content"`
 	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
 	TokenName        string `json:"token_name" gorm:"index;default:''"`
@@ -478,4 +478,87 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 	}
 
 	return total, nil
+}
+
+// ArchiveOldLogs archives logs older than the specified timestamp to a separate table
+// This helps improve query performance on the main logs table
+func ArchiveOldLogs(ctx context.Context, targetTimestamp int64, batchSize int) (archivedCount int64, err error) {
+	// Create archive table if not exists (logs_archive_YYYYMM)
+	archiveTableName := fmt.Sprintf("logs_archive_%s", time.Now().Format("200601"))
+
+	// Check if archive table exists
+	var exists bool
+	err = LOG_DB.Raw("SELECT 1 FROM information_schema.tables WHERE table_name = ? LIMIT 1", archiveTableName).Scan(&exists).Error
+	if err != nil || !exists {
+		// Create archive table with same structure
+		createSQL := fmt.Sprintf(`
+			CREATE TABLE IF NOT EXISTS %s LIKE logs
+		`, archiveTableName)
+		if err := LOG_DB.Exec(createSQL).Error; err != nil {
+			return 0, fmt.Errorf("failed to create archive table: %w", err)
+		}
+	}
+
+	// Archive logs in batches
+	for {
+		if ctx.Err() != nil {
+			return archivedCount, ctx.Err()
+		}
+
+		// Insert old logs into archive table
+		insertSQL := fmt.Sprintf(`
+			INSERT INTO %s SELECT * FROM logs WHERE created_at < ? LIMIT ?
+		`, archiveTableName)
+		result := LOG_DB.Exec(insertSQL, targetTimestamp, batchSize)
+		if result.Error != nil {
+			return archivedCount, fmt.Errorf("failed to archive logs: %w", result.Error)
+		}
+
+		if result.RowsAffected == 0 {
+			break
+		}
+
+		// Delete archived logs from main table
+		deleteResult := LOG_DB.Where("created_at < ?", targetTimestamp).Limit(batchSize).Delete(&Log{})
+		if deleteResult.Error != nil {
+			return archivedCount, fmt.Errorf("failed to delete archived logs: %w", deleteResult.Error)
+		}
+
+		archivedCount += result.RowsAffected
+
+		if result.RowsAffected < int64(batchSize) {
+			break
+		}
+	}
+
+	// Add index to archive table for better query performance
+	LOG_DB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s(created_at)", archiveTableName, archiveTableName))
+
+	return archivedCount, nil
+}
+
+// GetLogStats retrieves log statistics for performance monitoring
+func GetLogStats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	var totalCount int64
+	if err := LOG_DB.Model(&Log{}).Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+	stats["total_logs"] = totalCount
+
+	var oldestLog int64
+	LOG_DB.Model(&Log{}).Select("MIN(created_at)").Scan(&oldestLog)
+	stats["oldest_log_time"] = oldestLog
+
+	var newestLog int64
+	LOG_DB.Model(&Log{}).Select("MAX(created_at)").Scan(&newestLog)
+	stats["newest_log_time"] = newestLog
+
+	// Get table size (MySQL specific)
+	var tableSize string
+	LOG_DB.Raw("SELECT CONCAT(ROUND(SUM(data_length + index_length) / 1024 / 1024, 2), ' MB') FROM information_schema.tables WHERE table_name = 'logs'").Scan(&tableSize)
+	stats["table_size"] = tableSize
+
+	return stats, nil
 }

@@ -109,9 +109,14 @@ func CheckSetup() {
 			constant.Setup = false
 		}
 	} else {
-		// Setup record exists, system is initialized
-		common.SysLog("system is already initialized at: " + time.Unix(setup.InitializedAt, 0).String())
-		constant.Setup = true
+		// Setup record exists, check if root user also exists
+		if RootUserExists() {
+			common.SysLog("system is already initialized at: " + time.Unix(setup.InitializedAt, 0).String())
+			constant.Setup = true
+		} else {
+			common.SysLog("system initialization record exists, but root user is missing. Allowing re-initialization.")
+			constant.Setup = false
+		}
 	}
 }
 

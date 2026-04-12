@@ -25,10 +25,11 @@ type SetupRequest struct {
 }
 
 func GetSetup(c *gin.Context) {
+	isSetup := constant.Setup && model.RootUserExists()
 	setup := Setup{
-		Status: constant.Setup,
+		Status: isSetup,
 	}
-	if constant.Setup {
+	if isSetup {
 		c.JSON(200, gin.H{
 			"success": true,
 			"data":    setup,
@@ -52,8 +53,8 @@ func GetSetup(c *gin.Context) {
 }
 
 func PostSetup(c *gin.Context) {
-	// Check if setup is already completed
-	if constant.Setup {
+	// Check if setup is already completed and root user exists
+	if constant.Setup && model.RootUserExists() {
 		c.JSON(200, gin.H{
 			"success": false,
 			"message": "系统已经初始化完成",

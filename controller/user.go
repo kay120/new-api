@@ -824,7 +824,8 @@ func CreateUser(c *gin.Context) {
 		Username:    user.Username,
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
-		Role:        user.Role, // 保持管理员设置的角色
+		Role:        user.Role,  // 保持管理员设置的角色
+		Group:       user.Group, // 保持管理员设置的用户组
 	}
 	if err := cleanUser.Insert(0); err != nil {
 		common.ApiError(c, err)

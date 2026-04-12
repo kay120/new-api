@@ -74,7 +74,14 @@ func InitChannelCache() {
 				if oldChannel, ok := channelsIDM[i]; ok {
 					// 存在旧的渠道，如果是多key且轮询，保留轮询索引信息
 					if oldChannel.ChannelInfo.IsMultiKey && oldChannel.ChannelInfo.MultiKeyMode == constant.MultiKeyModePolling {
-						channel.ChannelInfo.MultiKeyPollingIndex = oldChannel.ChannelInfo.MultiKeyPollingIndex
+						// Use polling-specific lock to ensure thread-safe index copy
+						if lock, exists := channelPollingLocks.Load(i); exists {
+							lock.(*sync.Mutex).Lock()
+							channel.ChannelInfo.MultiKeyPollingIndex = oldChannel.ChannelInfo.MultiKeyPollingIndex
+							lock.(*sync.Mutex).Unlock()
+						} else {
+							channel.ChannelInfo.MultiKeyPollingIndex = oldChannel.ChannelInfo.MultiKeyPollingIndex
+						}
 					}
 				}
 			}
@@ -142,12 +149,10 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	targetPriority := int64(sortedUniquePriorities[retry])
 
 	// get the priority for the given retry number
-	var sumWeight = 0
 	var targetChannels []*Channel
 	for _, channelId := range channels {
 		if channel, ok := channelsIDM[channelId]; ok {
 			if channel.GetPriority() == targetPriority {
-				sumWeight += channel.GetWeight()
 				targetChannels = append(targetChannels, channel)
 			}
 		} else {
@@ -157,6 +162,18 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 
 	if len(targetChannels) == 0 {
 		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetPriority))
+	}
+
+	// Use dynamic channel selector if enabled
+	if common.EnableDynamicChannelSelection {
+		selector := GetChannelSelector()
+		return selector.SelectChannel(targetChannels, true), nil
+	}
+
+	// Fall back to original static weight-based selection
+	var sumWeight = 0
+	for _, ch := range targetChannels {
+		sumWeight += ch.GetWeight()
 	}
 
 	// smoothing factor and adjustment

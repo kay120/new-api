@@ -90,6 +90,9 @@ func main() {
 		go model.SyncChannelCache(common.SyncFrequency)
 	}
 
+	// Run database optimizations (foreign keys, indexes)
+	model.RunDatabaseOptimizations()
+
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 

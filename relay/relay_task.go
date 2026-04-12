@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 )
 
 type TaskSubmitResult struct {
@@ -197,7 +198,8 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if !common.StringsContains(constant.TaskPricePatches, modelName) {
 		for _, ra := range info.PriceData.OtherRatios {
 			if ra != 1.0 {
-				info.PriceData.Quota = int(float64(info.PriceData.Quota) * ra)
+				// Use decimal for precision calculation
+				info.PriceData.Quota = int(decimal.NewFromInt(int64(info.PriceData.Quota)).Mul(decimal.NewFromFloat(ra)).Round(0).IntPart())
 			}
 		}
 	}
@@ -263,19 +265,20 @@ func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float6
 	// 从 PriceData 获取不含 OtherRatios 的基础价格
 	baseQuota := info.PriceData.Quota
 	// 先除掉原有的 OtherRatios 恢复基础额度
+	baseQuotaDecimal := decimal.NewFromInt(int64(baseQuota))
 	for _, ra := range info.PriceData.OtherRatios {
 		if ra != 1.0 && ra > 0 {
-			baseQuota = int(float64(baseQuota) / ra)
+			baseQuotaDecimal = baseQuotaDecimal.Div(decimal.NewFromFloat(ra))
 		}
 	}
 	// 应用新的 ratios
-	result := float64(baseQuota)
+	result := baseQuotaDecimal
 	for _, ra := range ratios {
 		if ra != 1.0 {
-			result *= ra
+			result = result.Mul(decimal.NewFromFloat(ra))
 		}
 	}
-	return int(result)
+	return int(result.Round(0).IntPart())
 }
 
 var fetchRespBuilders = map[int]func(c *gin.Context) (respBody []byte, taskResp *dto.TaskError){
