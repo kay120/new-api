@@ -435,6 +435,7 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 			}
 		}
 	}
+
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
 	if respErr != nil {
 		return testResult{
@@ -471,7 +472,6 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 
 	quota := 0
 	if !priceData.UsePrice {
-		// Use decimal for precision calculation
 		completionQuota := decimal.NewFromInt(int64(usage.CompletionTokens)).Mul(decimal.NewFromFloat(priceData.CompletionRatio)).Round(0)
 		quotaDecimal := decimal.NewFromInt(int64(usage.PromptTokens)).Add(completionQuota)
 		quotaDecimal = quotaDecimal.Mul(decimal.NewFromFloat(priceData.ModelRatio))
@@ -644,11 +644,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				Input: testResponsesInput,
 			}
 		case constant.EndpointTypeAnthropic, constant.EndpointTypeGemini, constant.EndpointTypeOpenAI:
-			// 返回 GeneralOpenAIRequest
-			maxTokens := uint(16)
-			if constant.EndpointType(endpointType) == constant.EndpointTypeGemini {
-				maxTokens = 3000
-			}
+			// 返回 GeneralOpenAIRequest — 只需验证连通性，max_tokens=1 最小化消耗
 			req := &dto.GeneralOpenAIRequest{
 				Model:  model,
 				Stream: lo.ToPtr(isStream),
@@ -658,7 +654,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 						Content: "hi",
 					},
 				},
-				MaxTokens: lo.ToPtr(maxTokens),
+				MaxTokens: lo.ToPtr(uint(1)),
 			}
 			if isStream {
 				req.StreamOptions = &dto.StreamOptions{IncludeUsage: true}
@@ -720,17 +716,15 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 		testRequest.StreamOptions = &dto.StreamOptions{IncludeUsage: true}
 	}
 
+	// 渠道测试只需验证连通性，max_tokens=1 最小化 token 消耗和延迟
 	if strings.HasPrefix(model, "o") {
-		testRequest.MaxCompletionTokens = lo.ToPtr(uint(16))
-	} else if strings.Contains(model, "thinking") {
-		if !strings.Contains(model, "claude") {
-			testRequest.MaxTokens = lo.ToPtr(uint(50))
-		}
-	} else if strings.Contains(model, "gemini") {
-		testRequest.MaxTokens = lo.ToPtr(uint(3000))
+		testRequest.MaxCompletionTokens = lo.ToPtr(uint(1))
 	} else {
-		testRequest.MaxTokens = lo.ToPtr(uint(16))
+		testRequest.MaxTokens = lo.ToPtr(uint(1))
 	}
+
+	// 关闭思考模式，避免思考模型（qwen3、deepseek-r1 等）测试时花费大量时间和 token
+	testRequest.EnableThinking = json.RawMessage(`false`)
 
 	return testRequest
 }
