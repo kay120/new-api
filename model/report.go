@@ -146,15 +146,16 @@ func GetDailyStatsByReport(startTimestamp int64, endTimestamp int64, groupFilter
 		RequestCount int   `gorm:"column:request_count"`
 	}
 
+	// 使用 MySQL 的 DATE(FROM_UNIXTIME()) 按本地时区分组，避免 UTC 偏移问题
 	query := LOG_DB.Table("logs").
-		Select("(logs.created_at DIV 86400 * 86400) as `date`, sum(logs.quota) as quota, count(*) as request_count").
+		Select("UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(logs.created_at))) as `date`, sum(logs.quota) as quota, count(*) as request_count").
 		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
 
 	if groupFilter != "" {
 		query = query.Where("logs.group = ?", groupFilter)
 	}
 
-	query = query.Group("(logs.created_at DIV 86400 * 86400)").Order("`date` asc")
+	query = query.Group("DATE(FROM_UNIXTIME(logs.created_at))").Order("`date` asc")
 
 	var rawStats []rawDailyStat
 	if err := query.Scan(&rawStats).Error; err != nil {
