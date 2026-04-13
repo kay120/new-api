@@ -43,6 +43,11 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	if s.settled {
 		return nil
 	}
+	// 自用模式没有 funding，直接标记完成
+	if s.funding == nil {
+		s.settled = true
+		return nil
+	}
 	delta := actualQuota - s.preConsumedQuota
 	if delta == 0 {
 		s.settled = true
@@ -80,6 +85,11 @@ func (s *BillingSession) Settle(actualQuota int) error {
 // Refund 退还所有预扣费，幂等安全，异步执行。
 func (s *BillingSession) Refund(c *gin.Context) {
 	s.mu.Lock()
+	// 自用模式没有 funding，无需退款
+	if s.funding == nil {
+		s.mu.Unlock()
+		return
+	}
 	if s.settled || s.refunded || !s.needsRefundLocked() {
 		s.mu.Unlock()
 		return
