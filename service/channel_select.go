@@ -160,6 +160,13 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			return nil, param.TokenGroup, err
 		}
 	}
+	// 渠道级限流检查：超限时返回 nil 让系统尝试下一个渠道
+	if channel != nil {
+		if model.CheckChannelRateLimit(channel.Id, channel.RPMLimit, channel.TPMLimit, channel.DailyTokenLimit) {
+			return nil, selectGroup, nil
+		}
+	}
+
 	// 如果用户设置了 allowed_channels（格式: "渠道ID:模型,渠道ID:*"），检查渠道+模型组合
 	if channel != nil {
 		allowedChannels := common.GetContextKeyString(param.Ctx, constant.ContextKeyAllowedChannels)

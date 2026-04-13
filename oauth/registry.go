@@ -1,11 +1,7 @@
 package oauth
 
 import (
-	"fmt"
 	"sync"
-
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
 )
 
 var (
@@ -56,19 +52,9 @@ func GetAllProviders() map[string]Provider {
 	return result
 }
 
-// GetEnabledCustomProviders returns all enabled custom OAuth providers
-func GetEnabledCustomProviders() []*GenericOAuthProvider {
-	mu.RLock()
-	defer mu.RUnlock()
-	var result []*GenericOAuthProvider
-	for name, provider := range providers {
-		if customProviderSlugs[name] {
-			if gp, ok := provider.(*GenericOAuthProvider); ok && gp.IsEnabled() {
-				result = append(result, gp)
-			}
-		}
-	}
-	return result
+// GetEnabledCustomProviders is a no-op in slim build
+func GetEnabledCustomProviders() []interface{} {
+	return nil
 }
 
 // IsProviderRegistered checks if a provider is registered
@@ -96,21 +82,7 @@ func LoadCustomProviders() error {
 	customProviderSlugs = make(map[string]bool)
 	mu.Unlock()
 
-	// Load all custom providers from database
-	customProviders, err := model.GetAllCustomOAuthProviders()
-	if err != nil {
-		common.SysError("Failed to load custom OAuth providers: " + err.Error())
-		return err
-	}
-
-	// Register each custom provider
-	for _, config := range customProviders {
-		provider := NewGenericOAuthProvider(config)
-		RegisterCustom(config.Slug, provider)
-		common.SysLog("Loaded custom OAuth provider: " + config.Name + " (" + config.Slug + ")")
-	}
-
-	common.SysLog(fmt.Sprintf("Loaded %d custom OAuth providers", len(customProviders)))
+	// Custom OAuth providers removed in slim build
 	return nil
 }
 
@@ -119,13 +91,8 @@ func ReloadCustomProviders() error {
 	return LoadCustomProviders()
 }
 
-// RegisterOrUpdateCustomProvider registers or updates a single custom provider
-func RegisterOrUpdateCustomProvider(config *model.CustomOAuthProvider) {
-	provider := NewGenericOAuthProvider(config)
-	mu.Lock()
-	defer mu.Unlock()
-	providers[config.Slug] = provider
-	customProviderSlugs[config.Slug] = true
+// RegisterOrUpdateCustomProvider is a no-op in slim build
+func RegisterOrUpdateCustomProvider(_ interface{}) {
 }
 
 // UnregisterCustomProvider unregisters a custom provider by slug

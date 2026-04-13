@@ -266,7 +266,6 @@ func migrateDB() error {
 		&User{},
 		&PasskeyCredential{},
 		&Option{},
-		&Redemption{},
 		&Ability{},
 		&Log{},
 		&Midjourney{},
@@ -279,11 +278,9 @@ func migrateDB() error {
 		&Setup{},
 		&TwoFA{},
 		&TwoFABackupCode{},
-		&Checkin{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
 		&SubscriptionPreConsumeRecord{},
-		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 	)
 	if err != nil {
@@ -314,7 +311,6 @@ func migrateDBFast() error {
 		{&User{}, "User"},
 		{&PasskeyCredential{}, "PasskeyCredential"},
 		{&Option{}, "Option"},
-		{&Redemption{}, "Redemption"},
 		{&Ability{}, "Ability"},
 		{&Log{}, "Log"},
 		{&Midjourney{}, "Midjourney"},
@@ -327,11 +323,9 @@ func migrateDBFast() error {
 		{&Setup{}, "Setup"},
 		{&TwoFA{}, "TwoFA"},
 		{&TwoFABackupCode{}, "TwoFABackupCode"},
-		{&Checkin{}, "Checkin"},
 		{&SubscriptionOrder{}, "SubscriptionOrder"},
 		{&UserSubscription{}, "UserSubscription"},
 		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},
-		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大

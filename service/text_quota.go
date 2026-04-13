@@ -430,4 +430,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
 	})
+
+	// 记录渠道级 token 消耗（用于渠道限流）
+	model.RecordChannelTokenUsage(relayInfo.ChannelId, summary.PromptTokens+summary.CompletionTokens)
 }
