@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -19,16 +18,16 @@ func CheckChannelRateLimit(channelId, rpmLimit, tpmLimit, dailyLimit int) bool {
 	}
 	ctx := context.Background()
 
-	// RPM 检查
+	// RPM 检查：先 GET 判断是否超限，未超限才 INCR
 	if rpmLimit > 0 {
 		key := fmt.Sprintf("ch_rpm:%d", channelId)
-		val, err := common.RDB.Incr(ctx, key).Result()
-		if err == nil && val == 1 {
-			common.RDB.Expire(ctx, key, time.Minute)
-		}
-		if val > int64(rpmLimit) {
+		val, _ := common.RDB.Get(ctx, key).Int64()
+		if val >= int64(rpmLimit) {
 			return true
 		}
+		// 未超限，递增并确保有 TTL
+		common.RDB.Incr(ctx, key)
+		common.RDB.Expire(ctx, key, time.Minute) // 每次刷新 TTL，避免 key 永不过期
 	}
 
 	// TPM 检查
@@ -59,21 +58,15 @@ func RecordChannelTokenUsage(channelId, tokens int) {
 		return
 	}
 	ctx := context.Background()
-	tokensStr := strconv.FormatInt(int64(tokens), 10)
-	_ = tokensStr
 
-	// TPM
+	// TPM — IncrBy 并确保有 TTL
 	tpmKey := fmt.Sprintf("ch_tpm:%d", channelId)
-	val, err := common.RDB.IncrBy(ctx, tpmKey, int64(tokens)).Result()
-	if err == nil && val == int64(tokens) {
-		common.RDB.Expire(ctx, tpmKey, time.Minute)
-	}
+	common.RDB.IncrBy(ctx, tpmKey, int64(tokens))
+	common.RDB.Expire(ctx, tpmKey, time.Minute)
 
 	// 每日
 	today := time.Now().Format("20060102")
 	dailyKey := fmt.Sprintf("ch_daily:%d:%s", channelId, today)
-	val, err = common.RDB.IncrBy(ctx, dailyKey, int64(tokens)).Result()
-	if err == nil && val == int64(tokens) {
-		common.RDB.Expire(ctx, dailyKey, 25*time.Hour)
-	}
+	common.RDB.IncrBy(ctx, dailyKey, int64(tokens))
+	common.RDB.Expire(ctx, dailyKey, 25*time.Hour)
 }

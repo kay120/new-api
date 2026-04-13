@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -160,38 +161,58 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			return nil, param.TokenGroup, err
 		}
 	}
-	// 渠道级限流检查：超限时返回 nil 让系统尝试下一个渠道
+	// 分组没找到渠道时，从 allowed_channels 补充查找（分组 + allowed_channels 取并集）
+	allowedChannels := common.GetContextKeyString(param.Ctx, constant.ContextKeyAllowedChannels)
+	if channel == nil && allowedChannels != "" {
+		channel, _ = findChannelFromAllowedList(allowedChannels, param.ModelName)
+	}
+
+	// 分组找到了渠道，但如果设了 allowed_channels，还需要验证该渠道是否在允许列表中
+	// （分组渠道 + allowed_channels 都算有效，不互相排斥）
+
+	// 渠道级限流检查
 	if channel != nil {
 		if model.CheckChannelRateLimit(channel.Id, channel.RPMLimit, channel.TPMLimit, channel.DailyTokenLimit) {
-			return nil, selectGroup, nil
+			return nil, selectGroup, fmt.Errorf("channel %d (%s) rate limited", channel.Id, channel.Name)
 		}
 	}
 
-	// 如果用户设置了 allowed_channels（格式: "渠道ID:模型,渠道ID:*"），检查渠道+模型组合
-	if channel != nil {
-		allowedChannels := common.GetContextKeyString(param.Ctx, constant.ContextKeyAllowedChannels)
-		if allowedChannels != "" {
-			allowed := false
-			for _, entry := range strings.Split(allowedChannels, ",") {
-				entry = strings.TrimSpace(entry)
-				parts := strings.SplitN(entry, ":", 2)
-				if len(parts) != 2 {
-					continue
-				}
-				chId, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-				if err != nil || chId != channel.Id {
-					continue
-				}
-				modelName := strings.TrimSpace(parts[1])
-				if modelName == "*" || modelName == param.ModelName {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				return nil, selectGroup, nil
-			}
+	return channel, selectGroup, nil
+}
+
+// findChannelFromAllowedList 从 allowed_channels 列表中查找能提供指定模型的渠道
+// allowed_channels 格式: "渠道ID:模型,渠道ID:*"
+func findChannelFromAllowedList(allowedChannels string, modelName string) (*model.Channel, error) {
+	// 收集所有允许该模型的渠道 ID
+	var candidateIds []int
+	for _, entry := range strings.Split(allowedChannels, ",") {
+		entry = strings.TrimSpace(entry)
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		chId, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			continue
+		}
+		m := strings.TrimSpace(parts[1])
+		if m == "*" || m == modelName {
+			candidateIds = append(candidateIds, chId)
 		}
 	}
-	return channel, selectGroup, nil
+	if len(candidateIds) == 0 {
+		return nil, nil
+	}
+
+	// 从候选渠道中找一个可用的（状态正常）
+	for _, id := range candidateIds {
+		ch, err := model.CacheGetChannel(id)
+		if err != nil {
+			continue
+		}
+		if ch.Status == 1 {
+			return ch, nil
+		}
+	}
+	return nil, nil
 }

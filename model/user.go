@@ -539,6 +539,14 @@ func (user *User) Edit(updatePassword bool) error {
 		return err
 	}
 
+	// 同步更新后的值到 user，确保缓存写入最新数据
+	user.Username = newUser.Username
+	user.DisplayName = newUser.DisplayName
+	user.Group = newUser.Group
+	user.Quota = newUser.Quota
+	user.Remark = newUser.Remark
+	user.AllowedChannels = newUser.AllowedChannels
+
 	// Update cache
 	return updateUserCache(*user)
 }

@@ -475,6 +475,12 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 				newAPIError: types.NewOpenAIError(readErr, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError),
 			}
 		}
+		// 兜底：body 已关闭但没读到数据
+		return testResult{
+			context:     c,
+			localErr:    fmt.Errorf("stream returned no data"),
+			newAPIError: types.NewOpenAIError(fmt.Errorf("stream returned no data"), types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError),
+		}
 	}
 
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
