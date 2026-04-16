@@ -416,6 +416,12 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other["input_tokens_total"] = usage.InputTokens
 	}
 
+	// 计算首 Token 延迟（仅 streaming 场景有意义）
+	firstTokenMs := 0
+	if relayInfo.IsStream && relayInfo.FirstResponseTime.After(relayInfo.StartTime) {
+		firstTokenMs = int(relayInfo.FirstResponseTime.Sub(relayInfo.StartTime).Milliseconds())
+	}
+
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     summary.PromptTokens,
@@ -426,6 +432,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Content:          logContent,
 		TokenId:          relayInfo.TokenId,
 		UseTimeSeconds:   int(summary.UseTimeSeconds),
+		FirstTokenMs:     firstTokenMs,
 		IsStream:         relayInfo.IsStream,
 		Group:            relayInfo.UsingGroup,
 		Other:            other,

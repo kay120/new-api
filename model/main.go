@@ -371,6 +371,15 @@ func migrateLOGDB() error {
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
 	}
+	if err = LOG_DB.AutoMigrate(&ModelMissEvent{}); err != nil {
+		return err
+	}
+	if err = LOG_DB.AutoMigrate(&ChannelHealthCheck{}); err != nil {
+		return err
+	}
+	if err = LOG_DB.AutoMigrate(&ModelUsageHourly{}); err != nil {
+		return err
+	}
 	return nil
 }
 

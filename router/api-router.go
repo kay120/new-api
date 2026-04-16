@@ -268,6 +268,16 @@ func SetApiRouter(router *gin.Engine) {
 			auditRoute.GET("/", controller.GetAuditLogs)
 		}
 
+		analyticsRoute := apiRouter.Group("/analytics")
+		{
+			// Admin-only: 全局分析
+			analyticsRoute.GET("/model-usage", middleware.AdminAuth(), controller.GetModelUsage)
+			analyticsRoute.GET("/model-ranking", middleware.AdminAuth(), controller.GetModelRanking)
+			analyticsRoute.GET("/missed-models", middleware.AdminAuth(), controller.GetMissedModels)
+			analyticsRoute.GET("/channel-health", middleware.AdminAuth(), controller.GetChannelHealthOverview)
+			analyticsRoute.GET("/channel-health/:id", middleware.AdminAuth(), controller.GetChannelHealthDetail)
+		}
+
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)

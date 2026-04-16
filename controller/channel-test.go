@@ -967,6 +967,15 @@ func testAllChannels(notify bool) error {
 			}
 
 			channel.UpdateResponseTime(milliseconds)
+
+			// 记录健康检查历史
+			checkSuccess := newAPIError == nil
+			errMsg := ""
+			if newAPIError != nil {
+				errMsg = newAPIError.Error()
+			}
+			model.RecordHealthCheck(channel.Id, checkSuccess, milliseconds, 0, errMsg)
+
 			time.Sleep(common.RequestInterval)
 		}
 

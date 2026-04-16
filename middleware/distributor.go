@@ -156,6 +156,10 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if channel == nil {
+						// 记录未命中模型事件：模型在所有分组的 Ability 表中都不存在
+						userId := c.GetInt("id")
+						userAgent := c.GetHeader("User-Agent")
+						model.RecordModelMiss(modelRequest.Model, userId, usingGroup, userAgent)
 						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
 						return
 					}
