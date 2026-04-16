@@ -99,6 +99,13 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
+				if IsPeakHoursBlocked(usingGroup) {
+					abortWithOpenAiMessage(c, http.StatusForbidden,
+						fmt.Sprintf("当前为错峰限制时段（%s ~ %s），分组「%s」暂不可用，请在非高峰时段使用",
+							common.PeakHoursStart, common.PeakHoursEnd, usingGroup))
+					return
+				}
+
 				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 					preferred, err := model.CacheGetChannel(preferredChannelID)
 					if err == nil && preferred != nil {

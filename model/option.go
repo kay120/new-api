@@ -49,6 +49,11 @@ func InitOptionMap() {
 	common.OptionMap["ChannelAlertWebhookEnabled"] = strconv.FormatBool(common.ChannelAlertWebhookEnabled)
 	common.OptionMap["ChannelAlertWebhookURL"] = common.ChannelAlertWebhookURL
 	common.OptionMap["ChannelAlertWebhookSecret"] = common.ChannelAlertWebhookSecret
+	common.OptionMap["PeakHoursEnabled"] = strconv.FormatBool(common.PeakHoursEnabled)
+	common.OptionMap["PeakHoursStart"] = common.PeakHoursStart
+	common.OptionMap["PeakHoursEnd"] = common.PeakHoursEnd
+	common.OptionMap["PeakHoursWeekdays"] = common.PeakHoursWeekdays
+	common.OptionMap["PeakHoursRestrictedGroups"] = common.PeakHoursRestrictedGroups
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
@@ -269,6 +274,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.AutomaticEnableChannelEnabled = boolValue
 		case "ChannelAlertWebhookEnabled":
 			common.ChannelAlertWebhookEnabled = boolValue
+		case "PeakHoursEnabled":
+			common.PeakHoursEnabled = boolValue
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
@@ -505,6 +512,14 @@ func updateOptionMap(key string, value string) (err error) {
 		common.ChannelAlertWebhookURL = value
 	case "ChannelAlertWebhookSecret":
 		common.ChannelAlertWebhookSecret = value
+	case "PeakHoursStart":
+		common.PeakHoursStart = value
+	case "PeakHoursEnd":
+		common.PeakHoursEnd = value
+	case "PeakHoursWeekdays":
+		common.PeakHoursWeekdays = value
+	case "PeakHoursRestrictedGroups":
+		common.PeakHoursRestrictedGroups = value
 	case "QuotaPerUnit":
 		common.QuotaPerUnit, _ = strconv.ParseFloat(value, 64)
 	case "SensitiveWords":

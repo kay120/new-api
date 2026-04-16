@@ -113,6 +113,14 @@ var AutomaticEnableChannelEnabled = false
 var ChannelAlertWebhookEnabled = false
 var ChannelAlertWebhookURL = ""
 var ChannelAlertWebhookSecret = ""
+
+// Peak hours access control (错峰使用)
+var PeakHoursEnabled = false
+var PeakHoursStart = "09:00"
+var PeakHoursEnd = "18:00"
+var PeakHoursWeekdays = "1,2,3,4,5"          // 1=Monday..7=Sunday
+var PeakHoursRestrictedGroups = ""            // comma-separated group names
+
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
