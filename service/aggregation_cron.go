@@ -47,8 +47,12 @@ func runAggregation() {
 		common.SysLog("hourly aggregation completed")
 	}
 
-	// 每天 UTC 0 点执行清理（检查当前小时是否为 0）
+	// 检查用量里程碑
+	CheckMilestones()
+
+	// 每天 0 点执行清理 + 使用率下降检测
 	if now.Hour() == 0 {
+		CheckUsageDecline()
 		common.SysLog("cleaning up old aggregation data (>90 days)")
 		if err := model.CleanupOldHourlyUsage(90); err != nil {
 			common.SysError("cleanup old hourly usage failed: " + err.Error())

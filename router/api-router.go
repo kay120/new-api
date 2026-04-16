@@ -276,6 +276,22 @@ func SetApiRouter(router *gin.Engine) {
 			analyticsRoute.GET("/missed-models", middleware.AdminAuth(), controller.GetMissedModels)
 			analyticsRoute.GET("/channel-health", middleware.AdminAuth(), controller.GetChannelHealthOverview)
 			analyticsRoute.GET("/channel-health/:id", middleware.AdminAuth(), controller.GetChannelHealthDetail)
+			analyticsRoute.GET("/feedback-stats", middleware.AdminAuth(), controller.GetFeedbackStats)
+			analyticsRoute.GET("/feedback-list", middleware.AdminAuth(), controller.GetRecentFeedbackList)
+		}
+
+		feedbackRoute := apiRouter.Group("/feedback")
+		{
+			feedbackRoute.POST("/", middleware.UserAuth(), controller.PostFeedback)
+		}
+
+		modelRequestRoute := apiRouter.Group("/model-request")
+		{
+			modelRequestRoute.POST("/", middleware.UserAuth(), controller.CreateModelRequestHandler)
+			modelRequestRoute.GET("/self", middleware.UserAuth(), controller.GetUserModelRequestsHandler)
+			modelRequestRoute.GET("/", middleware.AdminAuth(), controller.GetAllModelRequestsHandler)
+			modelRequestRoute.GET("/stats", middleware.AdminAuth(), controller.GetModelRequestStatsHandler)
+			modelRequestRoute.PUT("/:id", middleware.AdminAuth(), controller.UpdateModelRequestHandler)
 		}
 
 		taskRoute := apiRouter.Group("/task")

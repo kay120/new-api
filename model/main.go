@@ -283,6 +283,7 @@ func migrateDB() error {
 		&SubscriptionPreConsumeRecord{},
 		&UserOAuthBinding{},
 		&AuditLog{},
+		&ModelRequest{},
 	)
 	if err != nil {
 		return err
@@ -378,6 +379,9 @@ func migrateLOGDB() error {
 		return err
 	}
 	if err = LOG_DB.AutoMigrate(&ModelUsageHourly{}); err != nil {
+		return err
+	}
+	if err = LOG_DB.AutoMigrate(&ModelFeedback{}); err != nil {
 		return err
 	}
 	return nil
