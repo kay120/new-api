@@ -57,6 +57,19 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	return normalized
 }
 
+// isTransientUpstreamError 判断是否是上游临时错误（过载/限流/网关错误）
+// 这类错误不代表渠道配置有问题，测试时应自动重试一次
+func isTransientUpstreamError(statusCode int) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests, // 429
+		http.StatusBadGateway,         // 502
+		http.StatusServiceUnavailable, // 503
+		http.StatusGatewayTimeout:     // 504
+		return true
+	}
+	return false
+}
+
 func testChannel(channel *model.Channel, testModel string, endpointType string, isStream bool) testResult {
 	tik := time.Now()
 	var unsupportedTestChannelTypes = []int{
@@ -764,17 +777,60 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 		testRequest.StreamOptions = &dto.StreamOptions{IncludeUsage: true}
 	}
 
-	// 渠道测试只需验证连通性，max_tokens=1 最小化 token 消耗和延迟
+	// 渠道测试只需验证连通性。
+	// 大多数模型 max_tokens=1 够用；但推理/思考类模型（kimi-k2.5、deepseek-r1、o1/o3、qwen3-thinking 等）
+	// 需要先消耗思考 token 再输出，max_tokens=1 会被上游判为无效请求，可能返回 429/400。
+	maxTokens := uint(1)
+	if isReasoningTestModel(model) {
+		maxTokens = 64
+	}
 	if strings.HasPrefix(model, "o") {
-		testRequest.MaxCompletionTokens = lo.ToPtr(uint(1))
+		testRequest.MaxCompletionTokens = lo.ToPtr(maxTokens)
 	} else {
-		testRequest.MaxTokens = lo.ToPtr(uint(1))
+		testRequest.MaxTokens = lo.ToPtr(maxTokens)
 	}
 
 	// 关闭思考模式，避免思考模型（qwen3、deepseek-r1 等）测试时花费大量时间和 token
-	testRequest.EnableThinking = json.RawMessage(`false`)
+	// 注：Moonshot / OpenAI 官方等不识别此字段会忽略；自研推理模型（qwen3、deepseek-r1）支持此字段
+	if supportEnableThinkingField(model) {
+		testRequest.EnableThinking = json.RawMessage(`false`)
+	}
 
 	return testRequest
+}
+
+// isReasoningTestModel 判断是否为推理/思考模型，这类模型测试时需要更大的 max_tokens
+func isReasoningTestModel(model string) bool {
+	lower := strings.ToLower(model)
+	patterns := []string{
+		"k2.5", "kimi-k2", "kimi-thinking",
+		"thinking",
+		"deepseek-r", "deepseek-reasoner",
+		"qwq", "reasoner",
+	}
+	for _, p := range patterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	if strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "o4") {
+		return true
+	}
+	return false
+}
+
+// supportEnableThinkingField 判断上游是否识别 enable_thinking 字段（通义千问、深度求索 等）
+// Moonshot / OpenAI / Anthropic 等不识别，发送会引起兼容问题
+func supportEnableThinkingField(model string) bool {
+	lower := strings.ToLower(model)
+	// 仅对明确支持的系列发送
+	return strings.HasPrefix(lower, "qwen3") ||
+		strings.Contains(lower, "deepseek-r") ||
+		strings.Contains(lower, "deepseek-v3.1") ||
+		strings.Contains(lower, "deepseek-v3.2") ||
+		strings.HasPrefix(lower, "qwq") ||
+		strings.HasPrefix(lower, "glm-4.5") ||
+		strings.HasPrefix(lower, "hunyuan-") && strings.Contains(lower, "thinking")
 }
 
 func TestChannel(c *gin.Context) {
@@ -801,6 +857,20 @@ func TestChannel(c *gin.Context) {
 	isStream, _ := strconv.ParseBool(c.Query("stream"))
 	tik := time.Now()
 	result := testChannel(channel, testModel, endpointType, isStream)
+	// 上游临时错误（429/502/503/504）指数退避重试最多 3 次，避免误判为渠道故障
+	retryCount := 0
+	backoffs := []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond, 3000 * time.Millisecond}
+	for i := 0; i < len(backoffs); i++ {
+		if result.localErr != nil || result.newAPIError == nil {
+			break
+		}
+		if !isTransientUpstreamError(result.newAPIError.StatusCode) {
+			break
+		}
+		time.Sleep(backoffs[i])
+		retryCount++
+		result = testChannel(channel, testModel, endpointType, isStream)
+	}
 	if result.localErr != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -814,9 +884,13 @@ func TestChannel(c *gin.Context) {
 	go channel.UpdateResponseTime(milliseconds)
 	consumedTime := float64(milliseconds) / 1000.0
 	if result.newAPIError != nil {
+		message := result.newAPIError.Error()
+		if isTransientUpstreamError(result.newAPIError.StatusCode) {
+			message = fmt.Sprintf("[上游临时过载/限流 HTTP %d，非渠道配置问题，已重试 %d 次仍失败，建议稍后再试] %s", result.newAPIError.StatusCode, retryCount, message)
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": result.newAPIError.Error(),
+			"message": message,
 			"time":    consumedTime,
 		})
 		return

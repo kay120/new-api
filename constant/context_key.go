@@ -52,6 +52,7 @@ const (
 	ContextKeyUsingGroup  ContextKey = "group"
 	ContextKeyUserName        ContextKey = "username"
 	ContextKeyAllowedChannels ContextKey = "allowed_channels"
+	ContextKeyDailyTokenLimit ContextKey = "daily_token_limit"
 
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 

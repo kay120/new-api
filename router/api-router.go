@@ -262,6 +262,12 @@ func SetApiRouter(router *gin.Engine) {
 			prefillGroupRoute.DELETE("/:id", controller.DeletePrefillGroup)
 		}
 
+		auditRoute := apiRouter.Group("/audit_log")
+		auditRoute.Use(middleware.AdminAuth())
+		{
+			auditRoute.GET("/", controller.GetAuditLogs)
+		}
+
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)

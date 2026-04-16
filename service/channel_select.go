@@ -89,6 +89,15 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 
+	// 用户每日 Tokens 上限检查
+	dailyLimit, _ := common.GetContextKey(param.Ctx, constant.ContextKeyDailyTokenLimit)
+	userId := common.GetContextKeyInt(param.Ctx, "id")
+	if limit, ok := dailyLimit.(int); ok && limit > 0 && userId > 0 {
+		if model.CheckUserDailyTokenLimit(userId, limit) {
+			return nil, selectGroup, fmt.Errorf("用户已达今日 Tokens 上限 (%d)", limit)
+		}
+	}
+
 	if param.TokenGroup == "auto" {
 		if len(setting.GetAutoGroups()) == 0 {
 			return nil, selectGroup, errors.New("auto groups is not enabled")

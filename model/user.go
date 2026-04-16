@@ -52,6 +52,7 @@ type User struct {
 	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	AllowedChannels  string         `json:"allowed_channels" gorm:"type:text"` // 管理员分配的可用渠道+模型，格式 "渠道ID:模型,渠道ID:*"，空值表示不限制
+	DailyTokenLimit  int            `json:"daily_token_limit" gorm:"default:0"` // 每日Token使用上限，0=不限制
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -64,6 +65,7 @@ func (user *User) ToBaseUser() *UserBase {
 		Setting:       user.Setting,
 		Email:         user.Email,
 		AllowedChannels: user.AllowedChannels,
+		DailyTokenLimit: user.DailyTokenLimit,
 	}
 	return cache
 }
@@ -528,7 +530,8 @@ func (user *User) Edit(updatePassword bool) error {
 		"group":          newUser.Group,
 		"quota":          newUser.Quota,
 		"remark":         newUser.Remark,
-		"allowed_channels": newUser.AllowedChannels,
+		"allowed_channels":  newUser.AllowedChannels,
+		"daily_token_limit": newUser.DailyTokenLimit,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password
@@ -546,6 +549,7 @@ func (user *User) Edit(updatePassword bool) error {
 	user.Quota = newUser.Quota
 	user.Remark = newUser.Remark
 	user.AllowedChannels = newUser.AllowedChannels
+	user.DailyTokenLimit = newUser.DailyTokenLimit
 
 	// Update cache
 	return updateUserCache(*user)

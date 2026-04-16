@@ -620,6 +620,10 @@ func UpdateUser(c *gin.Context) {
 	if originUser.Quota != updatedUser.Quota {
 		model.RecordLog(originUser.Id, model.LogTypeManage, fmt.Sprintf("管理员将用户额度从 %s修改为 %s", logger.LogQuota(originUser.Quota), logger.LogQuota(updatedUser.Quota)))
 	}
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "update_user", "user",
+		strconv.Itoa(updatedUser.Id),
+		fmt.Sprintf("group=%s, allowed_channels=%s, daily_token_limit=%d", updatedUser.Group, updatedUser.AllowedChannels, updatedUser.DailyTokenLimit),
+		c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -821,6 +825,8 @@ func DeleteUser(c *gin.Context) {
 		})
 		return
 	}
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "delete_user", "user",
+		strconv.Itoa(id), "username="+originUser.Username, c.ClientIP())
 }
 
 func DeleteSelf(c *gin.Context) {
@@ -877,6 +883,10 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "create_user", "user",
+		strconv.Itoa(cleanUser.Id),
+		fmt.Sprintf("username=%s, role=%d, group=%s", cleanUser.Username, cleanUser.Role, cleanUser.Group),
+		c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -963,6 +973,10 @@ func ManageUser(c *gin.Context) {
 		Role:   user.Role,
 		Status: user.Status,
 	}
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "manage_user", "user",
+		strconv.Itoa(user.Id),
+		fmt.Sprintf("action=%s, username=%s", req.Action, user.Username),
+		c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

@@ -23,6 +23,7 @@ type UserBase struct {
 	Username      string `json:"username"`
 	Setting       string `json:"setting"`
 	AllowedChannels string `json:"allowed_channels"`
+	DailyTokenLimit int    `json:"daily_token_limit"`
 }
 
 func (user *UserBase) WriteContext(c *gin.Context) {
@@ -33,6 +34,7 @@ func (user *UserBase) WriteContext(c *gin.Context) {
 	common.SetContextKey(c, constant.ContextKeyUserName, user.Username)
 	common.SetContextKey(c, constant.ContextKeyUserSetting, user.GetSetting())
 	common.SetContextKey(c, constant.ContextKeyAllowedChannels, user.AllowedChannels)
+	common.SetContextKey(c, constant.ContextKeyDailyTokenLimit, user.DailyTokenLimit)
 }
 
 func (user *UserBase) GetSetting() dto.UserSetting {
@@ -110,6 +112,7 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 		Setting:         user.Setting,
 		Email:           user.Email,
 		AllowedChannels: user.AllowedChannels,
+		DailyTokenLimit: user.DailyTokenLimit,
 	}
 
 	return userCache, nil

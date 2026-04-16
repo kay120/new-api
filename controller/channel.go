@@ -682,6 +682,9 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 	service.ResetProxyClientCache()
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "add_channel", "channel", "",
+		fmt.Sprintf("count=%d, name=%s, type=%d", len(channels), addChannelRequest.Channel.Name, addChannelRequest.Channel.Type),
+		c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -698,6 +701,8 @@ func DeleteChannel(c *gin.Context) {
 		return
 	}
 	model.InitChannelCache()
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "delete_channel", "channel",
+		strconv.Itoa(id), "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -986,6 +991,10 @@ func UpdateChannel(c *gin.Context) {
 	}
 	model.InitChannelCache()
 	service.ResetProxyClientCache()
+	model.RecordAuditLog(c.GetInt("id"), c.GetString("username"), "update_channel", "channel",
+		strconv.Itoa(channel.Id),
+		fmt.Sprintf("name=%s, models=%s, group=%s", channel.Name, channel.Models, channel.Group),
+		c.ClientIP())
 	channel.Key = ""
 	clearChannelInfo(&channel.Channel)
 	c.JSON(http.StatusOK, gin.H{
