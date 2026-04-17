@@ -2,12 +2,10 @@ package constant
 
 const (
 	ChannelTypeUnknown        = 0
-	ChannelTypeOpenAI         = 1
-	ChannelTypeMidjourney     = 2
-	ChannelTypeAzure          = 3
-	ChannelTypeOllama         = 4
-	ChannelTypeMidjourneyPlus = 5
-	ChannelTypeOpenAIMax      = 6
+	ChannelTypeOpenAI    = 1
+	ChannelTypeAzure     = 3
+	ChannelTypeOllama    = 4
+	ChannelTypeOpenAIMax = 6
 	ChannelTypeOhMyGPT        = 7
 	ChannelTypeCustom         = 8
 	ChannelTypeAILS           = 9
@@ -121,13 +119,11 @@ var ChannelBaseURLs = []string{
 }
 
 var ChannelTypeNames = map[int]string{
-	ChannelTypeUnknown:        "Unknown",
-	ChannelTypeOpenAI:         "OpenAI",
-	ChannelTypeMidjourney:     "Midjourney",
-	ChannelTypeAzure:          "Azure",
-	ChannelTypeOllama:         "Ollama",
-	ChannelTypeMidjourneyPlus: "MidjourneyPlus",
-	ChannelTypeOpenAIMax:      "OpenAIMax",
+	ChannelTypeUnknown:   "Unknown",
+	ChannelTypeOpenAI:    "OpenAI",
+	ChannelTypeAzure:     "Azure",
+	ChannelTypeOllama:    "Ollama",
+	ChannelTypeOpenAIMax: "OpenAIMax",
 	ChannelTypeOhMyGPT:        "OhMyGPT",
 	ChannelTypeCustom:         "Custom",
 	ChannelTypeAILS:           "AILS",
