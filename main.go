@@ -13,7 +13,9 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/controller"
+	"github.com/QuantumNous/new-api/controller/billing"
+	channelctl "github.com/QuantumNous/new-api/controller/channel"
+	"github.com/QuantumNous/new-api/controller/relayctl"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
@@ -104,10 +106,10 @@ func main() {
 		if err != nil {
 			common.FatalLog("failed to parse CHANNEL_UPDATE_FREQUENCY: " + err.Error())
 		}
-		go controller.AutomaticallyUpdateChannels(frequency)
+		go billing.AutomaticallyUpdateChannels(frequency)
 	}
 
-	go controller.AutomaticallyTestChannels()
+	go channelctl.AutomaticallyTestChannels()
 	service.StartAggregationCron()
 
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
@@ -126,11 +128,11 @@ func main() {
 	}
 
 	// Channel upstream model update check task
-	controller.StartChannelUpstreamModelUpdateTask()
+	channelctl.StartChannelUpstreamModelUpdateTask()
 
 	if common.IsMasterNode && constant.UpdateTask {
 		gopool.Go(func() {
-			controller.UpdateTaskBulk()
+			relayctl.UpdateTaskBulk()
 		})
 	}
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {

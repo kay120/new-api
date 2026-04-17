@@ -2,7 +2,9 @@ package router
 
 import (
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/controller"
+	"github.com/QuantumNous/new-api/controller/modelctl"
+	"github.com/QuantumNous/new-api/controller/relayctl"
+	"github.com/QuantumNous/new-api/controller/userctl"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/types"
 
@@ -22,20 +24,20 @@ func SetRelayRouter(router *gin.Engine) {
 		modelsRouter.GET("", func(c *gin.Context) {
 			switch {
 			case c.GetHeader("x-api-key") != "" && c.GetHeader("anthropic-version") != "":
-				controller.ListModels(c, constant.ChannelTypeAnthropic)
+				modelctl.ListModels(c, constant.ChannelTypeAnthropic)
 			case c.GetHeader("x-goog-api-key") != "" || c.Query("key") != "": // 单独的适配
-				controller.RetrieveModel(c, constant.ChannelTypeGemini)
+				modelctl.RetrieveModel(c, constant.ChannelTypeGemini)
 			default:
-				controller.ListModels(c, constant.ChannelTypeOpenAI)
+				modelctl.ListModels(c, constant.ChannelTypeOpenAI)
 			}
 		})
 
 		modelsRouter.GET("/:model", func(c *gin.Context) {
 			switch {
 			case c.GetHeader("x-api-key") != "" && c.GetHeader("anthropic-version") != "":
-				controller.RetrieveModel(c, constant.ChannelTypeAnthropic)
+				modelctl.RetrieveModel(c, constant.ChannelTypeAnthropic)
 			default:
-				controller.RetrieveModel(c, constant.ChannelTypeOpenAI)
+				modelctl.RetrieveModel(c, constant.ChannelTypeOpenAI)
 			}
 		})
 	}
@@ -45,7 +47,7 @@ func SetRelayRouter(router *gin.Engine) {
 	geminiRouter.Use(middleware.TokenAuth())
 	{
 		geminiRouter.GET("", func(c *gin.Context) {
-			controller.ListModels(c, constant.ChannelTypeGemini)
+			modelctl.ListModels(c, constant.ChannelTypeGemini)
 		})
 	}
 
@@ -54,7 +56,7 @@ func SetRelayRouter(router *gin.Engine) {
 	geminiCompatibleRouter.Use(middleware.TokenAuth())
 	{
 		geminiCompatibleRouter.GET("", func(c *gin.Context) {
-			controller.ListModels(c, constant.ChannelTypeOpenAI)
+			modelctl.ListModels(c, constant.ChannelTypeOpenAI)
 		})
 	}
 
@@ -63,7 +65,7 @@ func SetRelayRouter(router *gin.Engine) {
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
 	playgroundRouter.Use(middleware.UserAuth(), middleware.Distribute())
 	{
-		playgroundRouter.POST("/chat/completions", controller.Playground)
+		playgroundRouter.POST("/chat/completions", userctl.Playground)
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
@@ -76,7 +78,7 @@ func SetRelayRouter(router *gin.Engine) {
 		wsRouter := relayV1Router.Group("")
 		wsRouter.Use(middleware.Distribute())
 		wsRouter.GET("/realtime", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIRealtime)
+			relayctl.Relay(c, types.RelayFormatOpenAIRealtime)
 		})
 	}
 	{
@@ -86,83 +88,83 @@ func SetRelayRouter(router *gin.Engine) {
 
 		// claude related routes
 		httpRouter.POST("/messages", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatClaude)
+			relayctl.Relay(c, types.RelayFormatClaude)
 		})
 
 		// chat related routes
 		httpRouter.POST("/completions", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAI)
+			relayctl.Relay(c, types.RelayFormatOpenAI)
 		})
 		httpRouter.POST("/chat/completions", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAI)
+			relayctl.Relay(c, types.RelayFormatOpenAI)
 		})
 
 		// response related routes
 		httpRouter.POST("/responses", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIResponses)
+			relayctl.Relay(c, types.RelayFormatOpenAIResponses)
 		})
 		httpRouter.POST("/responses/compact", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIResponsesCompaction)
+			relayctl.Relay(c, types.RelayFormatOpenAIResponsesCompaction)
 		})
 
 		// image related routes
 		httpRouter.POST("/edits", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIImage)
+			relayctl.Relay(c, types.RelayFormatOpenAIImage)
 		})
 		httpRouter.POST("/images/generations", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIImage)
+			relayctl.Relay(c, types.RelayFormatOpenAIImage)
 		})
 		httpRouter.POST("/images/edits", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIImage)
+			relayctl.Relay(c, types.RelayFormatOpenAIImage)
 		})
 
 		// embedding related routes
 		httpRouter.POST("/embeddings", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatEmbedding)
+			relayctl.Relay(c, types.RelayFormatEmbedding)
 		})
 
 		// audio related routes
 		httpRouter.POST("/audio/transcriptions", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIAudio)
+			relayctl.Relay(c, types.RelayFormatOpenAIAudio)
 		})
 		httpRouter.POST("/audio/translations", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIAudio)
+			relayctl.Relay(c, types.RelayFormatOpenAIAudio)
 		})
 		httpRouter.POST("/audio/speech", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIAudio)
+			relayctl.Relay(c, types.RelayFormatOpenAIAudio)
 		})
 
 		// rerank related routes
 		httpRouter.POST("/rerank", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatRerank)
+			relayctl.Relay(c, types.RelayFormatRerank)
 		})
 
 		// gemini relay routes
 		httpRouter.POST("/engines/:model/embeddings", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatGemini)
+			relayctl.Relay(c, types.RelayFormatGemini)
 		})
 		httpRouter.POST("/models/*path", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatGemini)
+			relayctl.Relay(c, types.RelayFormatGemini)
 		})
 
 		// other relay routes
 		httpRouter.POST("/moderations", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAI)
+			relayctl.Relay(c, types.RelayFormatOpenAI)
 		})
 
 		// not implemented
-		httpRouter.POST("/images/variations", controller.RelayNotImplemented)
-		httpRouter.GET("/files", controller.RelayNotImplemented)
-		httpRouter.POST("/files", controller.RelayNotImplemented)
-		httpRouter.DELETE("/files/:id", controller.RelayNotImplemented)
-		httpRouter.GET("/files/:id", controller.RelayNotImplemented)
-		httpRouter.GET("/files/:id/content", controller.RelayNotImplemented)
-		httpRouter.POST("/fine-tunes", controller.RelayNotImplemented)
-		httpRouter.GET("/fine-tunes", controller.RelayNotImplemented)
-		httpRouter.GET("/fine-tunes/:id", controller.RelayNotImplemented)
-		httpRouter.POST("/fine-tunes/:id/cancel", controller.RelayNotImplemented)
-		httpRouter.GET("/fine-tunes/:id/events", controller.RelayNotImplemented)
-		httpRouter.DELETE("/models/:model", controller.RelayNotImplemented)
+		httpRouter.POST("/images/variations", relayctl.RelayNotImplemented)
+		httpRouter.GET("/files", relayctl.RelayNotImplemented)
+		httpRouter.POST("/files", relayctl.RelayNotImplemented)
+		httpRouter.DELETE("/files/:id", relayctl.RelayNotImplemented)
+		httpRouter.GET("/files/:id", relayctl.RelayNotImplemented)
+		httpRouter.GET("/files/:id/content", relayctl.RelayNotImplemented)
+		httpRouter.POST("/fine-tunes", relayctl.RelayNotImplemented)
+		httpRouter.GET("/fine-tunes", relayctl.RelayNotImplemented)
+		httpRouter.GET("/fine-tunes/:id", relayctl.RelayNotImplemented)
+		httpRouter.POST("/fine-tunes/:id/cancel", relayctl.RelayNotImplemented)
+		httpRouter.GET("/fine-tunes/:id/events", relayctl.RelayNotImplemented)
+		httpRouter.DELETE("/models/:model", relayctl.RelayNotImplemented)
 	}
 
 	relaySunoRouter := router.Group("/suno")
@@ -170,9 +172,9 @@ func SetRelayRouter(router *gin.Engine) {
 	relaySunoRouter.Use(middleware.SystemPerformanceCheck())
 	relaySunoRouter.Use(middleware.TokenAuth(), middleware.Distribute())
 	{
-		relaySunoRouter.POST("/submit/:action", controller.RelayTask)
-		relaySunoRouter.POST("/fetch", controller.RelayTaskFetch)
-		relaySunoRouter.GET("/fetch/:id", controller.RelayTaskFetch)
+		relaySunoRouter.POST("/submit/:action", relayctl.RelayTask)
+		relaySunoRouter.POST("/fetch", relayctl.RelayTaskFetch)
+		relaySunoRouter.GET("/fetch/:id", relayctl.RelayTaskFetch)
 	}
 
 	relayGeminiRouter := router.Group("/v1beta")
@@ -184,7 +186,7 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		// Gemini API 路径格式: /v1beta/models/{model_name}:{action}
 		relayGeminiRouter.POST("/models/*path", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatGemini)
+			relayctl.Relay(c, types.RelayFormatGemini)
 		})
 	}
 }
