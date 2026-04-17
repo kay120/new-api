@@ -8,9 +8,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 )
-
-var timeFormat = "2006-01-02T15:04:05.000Z"
 
 var inMemoryRateLimiter common.InMemoryRateLimiter
 
@@ -18,49 +17,64 @@ var defNext = func(c *gin.Context) {
 	c.Next()
 }
 
-func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
-	ctx := context.Background()
-	rdb := common.RDB
-	key := "rateLimit:" + mark + c.ClientIP()
-	listLength, err := rdb.LLen(ctx, key).Result()
+// slidingWindowScript 原子化滑动窗口限流。
+// KEYS[1] = 限流 key
+// ARGV[1] = max（最大请求数）
+// ARGV[2] = window_ns（窗口纳秒数）
+// ARGV[3] = now_ns（当前时间纳秒）
+// ARGV[4] = expire_sec（key TTL 秒）
+// 返回：1=允许，0=拒绝
+var slidingWindowScript = redis.NewScript(`
+local len = redis.call('LLEN', KEYS[1])
+local max = tonumber(ARGV[1])
+
+if len < max then
+    redis.call('LPUSH', KEYS[1], ARGV[3])
+    redis.call('EXPIRE', KEYS[1], ARGV[4])
+    return 1
+end
+
+local oldest = tonumber(redis.call('LINDEX', KEYS[1], -1))
+local now = tonumber(ARGV[3])
+local window = tonumber(ARGV[2])
+
+if now - oldest < window then
+    redis.call('EXPIRE', KEYS[1], ARGV[4])
+    return 0
+end
+
+redis.call('LPUSH', KEYS[1], ARGV[3])
+redis.call('LTRIM', KEYS[1], 0, max - 1)
+redis.call('EXPIRE', KEYS[1], ARGV[4])
+return 1
+`)
+
+// redisSlidingWindow 一次 RTT 原子执行限流检查与记录。
+func redisSlidingWindow(ctx context.Context, key string, max int, durationSec int64) (bool, error) {
+	expireSec := int64(common.RateLimitKeyExpirationDuration / time.Second)
+	res, err := slidingWindowScript.Run(
+		ctx, common.RDB,
+		[]string{key},
+		max, durationSec*int64(time.Second), time.Now().UnixNano(), expireSec,
+	).Int()
 	if err != nil {
-		fmt.Println(err.Error())
+		return false, err
+	}
+	return res == 1, nil
+}
+
+func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
+	key := "rateLimit:" + mark + c.ClientIP()
+	allowed, err := redisSlidingWindow(c.Request.Context(), key, maxRequestNum, duration)
+	if err != nil {
+		common.SysError("rate limit redis error: " + err.Error())
 		c.Status(http.StatusInternalServerError)
 		c.Abort()
 		return
 	}
-	if listLength < int64(maxRequestNum) {
-		rdb.LPush(ctx, key, time.Now().Format(timeFormat))
-		rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
-	} else {
-		oldTimeStr, _ := rdb.LIndex(ctx, key, -1).Result()
-		oldTime, err := time.Parse(timeFormat, oldTimeStr)
-		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
-			return
-		}
-		nowTimeStr := time.Now().Format(timeFormat)
-		nowTime, err := time.Parse(timeFormat, nowTimeStr)
-		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
-			return
-		}
-		// time.Since will return negative number!
-		// See: https://stackoverflow.com/questions/50970900/why-is-time-since-returning-negative-durations-on-windows
-		if int64(nowTime.Sub(oldTime).Seconds()) < duration {
-			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
-			c.Status(http.StatusTooManyRequests)
-			c.Abort()
-			return
-		} else {
-			rdb.LPush(ctx, key, time.Now().Format(timeFormat))
-			rdb.LTrim(ctx, key, 0, int64(maxRequestNum-1))
-			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
-		}
+	if !allowed {
+		c.Status(http.StatusTooManyRequests)
+		c.Abort()
 	}
 }
 
@@ -78,12 +92,11 @@ func rateLimitFactory(maxRequestNum int, duration int64, mark string) func(c *gi
 		return func(c *gin.Context) {
 			redisRateLimiter(c, maxRequestNum, duration, mark)
 		}
-	} else {
-		// It's safe to call multi times.
-		inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
-		return func(c *gin.Context) {
-			memoryRateLimiter(c, maxRequestNum, duration, mark)
-		}
+	}
+	// It's safe to call multi times.
+	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+	return func(c *gin.Context) {
+		memoryRateLimiter(c, maxRequestNum, duration, mark)
 	}
 }
 
@@ -150,48 +163,18 @@ func userRateLimitFactory(maxRequestNum int, duration int64, mark string) func(c
 	}
 }
 
-// userRedisRateLimiter is like redisRateLimiter but accepts a pre-built key
-// (to support user-ID-based keys).
+// userRedisRateLimiter accepts a pre-built key (to support user-ID-based keys).
 func userRedisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, key string) {
-	ctx := context.Background()
-	rdb := common.RDB
-	listLength, err := rdb.LLen(ctx, key).Result()
+	allowed, err := redisSlidingWindow(c.Request.Context(), key, maxRequestNum, duration)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.SysError("user rate limit redis error: " + err.Error())
 		c.Status(http.StatusInternalServerError)
 		c.Abort()
 		return
 	}
-	if listLength < int64(maxRequestNum) {
-		rdb.LPush(ctx, key, time.Now().Format(timeFormat))
-		rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
-	} else {
-		oldTimeStr, _ := rdb.LIndex(ctx, key, -1).Result()
-		oldTime, err := time.Parse(timeFormat, oldTimeStr)
-		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
-			return
-		}
-		nowTimeStr := time.Now().Format(timeFormat)
-		nowTime, err := time.Parse(timeFormat, nowTimeStr)
-		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
-			return
-		}
-		if int64(nowTime.Sub(oldTime).Seconds()) < duration {
-			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
-			c.Status(http.StatusTooManyRequests)
-			c.Abort()
-			return
-		} else {
-			rdb.LPush(ctx, key, time.Now().Format(timeFormat))
-			rdb.LTrim(ctx, key, 0, int64(maxRequestNum-1))
-			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
-		}
+	if !allowed {
+		c.Status(http.StatusTooManyRequests)
+		c.Abort()
 	}
 }
 

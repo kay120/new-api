@@ -20,6 +20,9 @@ import (
 const (
 	ModelRequestRateLimitCountMark        = "MRRL"
 	ModelRequestRateLimitSuccessCountMark = "MRRLS"
+
+	// timeFormat is the timestamp format used for sliding window rate limit entries.
+	timeFormat = "2006-01-02T15:04:05.000Z"
 )
 
 // 检查Redis中的请求限制
