@@ -49,9 +49,8 @@ type User struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 	LinuxDOId        string         `json:"linux_do_id" gorm:"column:linux_do_id;index"`
 	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
-	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
-	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
-	AllowedChannels  string         `json:"allowed_channels" gorm:"type:text"` // 管理员分配的可用渠道+模型，格式 "渠道ID:模型,渠道ID:*"，空值表示不限制
+	Remark          string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	AllowedChannels string         `json:"allowed_channels" gorm:"type:text"` // 管理员分配的可用渠道+模型，格式 "渠道ID:模型,渠道ID:*"，空值表示不限制
 	DailyTokenLimit  int            `json:"daily_token_limit" gorm:"default:0"` // 每日Token使用上限，0=不限制
 }
 
