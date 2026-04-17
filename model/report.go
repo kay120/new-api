@@ -40,9 +40,11 @@ type UserStat struct {
 
 // DailyStat 按日统计
 type DailyStat struct {
-	Date         string `json:"date"`
-	Quota        int    `json:"quota"`
-	RequestCount int    `json:"request_count"`
+	Date             string `json:"date"`
+	Quota            int    `json:"quota"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
 }
 
 // ReportOverview 报表概览
@@ -141,14 +143,16 @@ func GetDailyStatsByReport(startTimestamp int64, endTimestamp int64, groupFilter
 	}
 
 	type rawDailyStat struct {
-		DateUnix     int64 `gorm:"column:date"`
-		Quota        int   `gorm:"column:quota"`
-		RequestCount int   `gorm:"column:request_count"`
+		DateUnix         int64 `gorm:"column:date"`
+		Quota            int   `gorm:"column:quota"`
+		RequestCount     int   `gorm:"column:request_count"`
+		PromptTokens     int   `gorm:"column:prompt_tokens"`
+		CompletionTokens int   `gorm:"column:completion_tokens"`
 	}
 
 	// 使用 MySQL 的 DATE(FROM_UNIXTIME()) 按本地时区分组，避免 UTC 偏移问题
 	query := LOG_DB.Table("logs").
-		Select("UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(logs.created_at))) as `date`, sum(logs.quota) as quota, count(*) as request_count").
+		Select("UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(logs.created_at))) as `date`, sum(logs.quota) as quota, count(*) as request_count, sum(logs.prompt_tokens) as prompt_tokens, sum(logs.completion_tokens) as completion_tokens").
 		Where("logs.type = ? and logs.created_at >= ? and logs.created_at <= ?", LogTypeConsume, startTimestamp, endTimestamp)
 
 	if groupFilter != "" {
@@ -166,9 +170,11 @@ func GetDailyStatsByReport(startTimestamp int64, endTimestamp int64, groupFilter
 	stats := make([]DailyStat, 0, len(rawStats))
 	for _, r := range rawStats {
 		stats = append(stats, DailyStat{
-			Date:         time.Unix(r.DateUnix, 0).Format("2006-01-02"),
-			Quota:        r.Quota,
-			RequestCount: r.RequestCount,
+			Date:             time.Unix(r.DateUnix, 0).Format("2006-01-02"),
+			Quota:            r.Quota,
+			RequestCount:     r.RequestCount,
+			PromptTokens:     r.PromptTokens,
+			CompletionTokens: r.CompletionTokens,
 		})
 	}
 
