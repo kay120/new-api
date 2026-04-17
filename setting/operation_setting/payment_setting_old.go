@@ -9,7 +9,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 )
 
-var PayAddress = ""
 var CustomCallbackAddress = ""
 var Price = 7.3
 var MinTopUp = 1

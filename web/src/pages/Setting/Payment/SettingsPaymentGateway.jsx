@@ -18,11 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Button, Form, Row, Col, Typography, Spin } from '@douyinfe/semi-ui';
-const { Text } = Typography;
+import { Button, Form, Row, Col, Spin } from '@douyinfe/semi-ui';
 import {
   API,
-  removeTrailingSlash,
   showError,
   showSuccess,
   verifyJSON,
@@ -33,9 +31,6 @@ export default function SettingsPaymentGateway(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [inputs, setInputs] = useState({
-    PayAddress: '',
-    EpayId: '',
-    EpayKey: '',
     Price: 7.3,
     MinTopUp: 1,
     TopupGroupRatio: '',
@@ -50,9 +45,6 @@ export default function SettingsPaymentGateway(props) {
   useEffect(() => {
     if (props.options && formApiRef.current) {
       const currentInputs = {
-        PayAddress: props.options.PayAddress || '',
-        EpayId: props.options.EpayId || '',
-        EpayKey: props.options.EpayKey || '',
         Price:
           props.options.Price !== undefined
             ? parseFloat(props.options.Price)
@@ -140,16 +132,8 @@ export default function SettingsPaymentGateway(props) {
 
     setLoading(true);
     try {
-      const options = [
-        { key: 'PayAddress', value: removeTrailingSlash(inputs.PayAddress) },
-      ];
+      const options = [];
 
-      if (inputs.EpayId !== '') {
-        options.push({ key: 'EpayId', value: inputs.EpayId });
-      }
-      if (inputs.EpayKey !== undefined && inputs.EpayKey !== '') {
-        options.push({ key: 'EpayKey', value: inputs.EpayKey });
-      }
       if (inputs.Price !== '') {
         options.push({ key: 'Price', value: inputs.Price.toString() });
       }
@@ -217,39 +201,7 @@ export default function SettingsPaymentGateway(props) {
         getFormApi={(api) => (formApiRef.current = api)}
       >
         <Form.Section text={t('支付设置')}>
-          <Text>
-            {t(
-              '（当前仅支持易支付接口，默认使用上方服务器地址作为回调地址！）',
-            )}
-          </Text>
           <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}>
-            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
-              <Form.Input
-                field='PayAddress'
-                label={t('支付地址')}
-                placeholder={t('例如：https://yourdomain.com')}
-              />
-            </Col>
-            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
-              <Form.Input
-                field='EpayId'
-                label={t('易支付商户ID')}
-                placeholder={t('例如：0001')}
-              />
-            </Col>
-            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
-              <Form.Input
-                field='EpayKey'
-                label={t('易支付商户密钥')}
-                placeholder={t('敏感信息不会发送到前端显示')}
-                type='password'
-              />
-            </Col>
-          </Row>
-          <Row
-            gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
-            style={{ marginTop: 16 }}
-          >
             <Col xs={24} sm={24} md={8} lg={8} xl={8}>
               <Form.Input
                 field='CustomCallbackAddress'

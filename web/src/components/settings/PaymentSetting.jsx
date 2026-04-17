@@ -31,9 +31,6 @@ const PaymentSetting = () => {
   const { t } = useTranslation();
   let [inputs, setInputs] = useState({
     ServerAddress: '',
-    PayAddress: '',
-    EpayId: '',
-    EpayKey: '',
     Price: 7.3,
     MinTopUp: 1,
     TopupGroupRatio: '',
