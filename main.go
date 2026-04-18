@@ -118,6 +118,9 @@ func main() {
 	// 审计日志保留期清理（AUDIT_LOG_RETENTION_DAYS，默认 90 天；<=0 则禁用）
 	service.StartAuditLogRetentionTask()
 
+	// 消耗日志异步写入（LOG_CONSUME_ASYNC=true 时启动；降请求热路径 P99）
+	model.StartConsumeLogWriter()
+
 	// Wire task polling adaptor factory (breaks service -> relay import cycle)
 	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
 		a := relay.GetTaskAdaptor(platform)
