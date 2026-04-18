@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -181,6 +182,8 @@ func userRedisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, key
 
 // ---------------------------------------------------------------------------
 // Login brute-force guard — per-username failure counter
+// 优先走 Redis；Redis 未启用时降级到进程内 memory 实现（单机部署可用，
+// 多实例需显式配 Redis 才能共享锁定状态）。
 // ---------------------------------------------------------------------------
 
 const (
@@ -193,46 +196,93 @@ const (
 	loginFailLockoutSec = 15 * 60
 )
 
+type loginFailEntry struct {
+	count       int
+	windowStart time.Time
+	lockedUntil time.Time
+}
+
+var (
+	loginFailMemMu sync.Mutex
+	loginFailMem   = make(map[string]*loginFailEntry)
+)
+
 func loginFailKey(username string) string {
 	return loginFailKeyPrefix + strings.ToLower(strings.TrimSpace(username))
 }
 
-// LoginBruteForceLocked 判断指定用户名当前是否因连续失败被锁定。
-// Redis 未启用时降级为 false（不阻挡），此时依赖 IP 级 CriticalRateLimit 兜底。
-func LoginBruteForceLocked(username string) bool {
-	if !common.RedisEnabled || username == "" {
-		return false
-	}
-	ctx := context.Background()
-	val, err := common.RDB.Get(ctx, loginFailKey(username)).Int()
-	if err != nil {
-		return false
-	}
-	return val >= loginFailThreshold
+func loginFailMemKey(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
 }
 
-// RecordLoginFailure 在验证失败后记一次失败，达到阈值时延长 TTL 为锁定期。
+// LoginBruteForceLocked 判断指定用户名当前是否因连续失败被锁定。
+func LoginBruteForceLocked(username string) bool {
+	if username == "" {
+		return false
+	}
+	if common.RedisEnabled {
+		ctx := context.Background()
+		val, err := common.RDB.Get(ctx, loginFailKey(username)).Int()
+		if err != nil {
+			return false
+		}
+		return val >= loginFailThreshold
+	}
+	// memory fallback
+	loginFailMemMu.Lock()
+	defer loginFailMemMu.Unlock()
+	entry, ok := loginFailMem[loginFailMemKey(username)]
+	if !ok {
+		return false
+	}
+	return time.Now().Before(entry.lockedUntil)
+}
+
+// RecordLoginFailure 在验证失败后记一次失败，达到阈值时进入锁定期。
 func RecordLoginFailure(username string) {
-	if !common.RedisEnabled || username == "" {
+	if username == "" {
 		return
 	}
-	ctx := context.Background()
-	key := loginFailKey(username)
-	count, err := common.RDB.Incr(ctx, key).Result()
-	if err != nil {
-		common.SysError("login brute-force counter incr failed: " + err.Error())
+	if common.RedisEnabled {
+		ctx := context.Background()
+		key := loginFailKey(username)
+		count, err := common.RDB.Incr(ctx, key).Result()
+		if err != nil {
+			common.SysError("login brute-force counter incr failed: " + err.Error())
+			return
+		}
+		if count == 1 {
+			common.RDB.Expire(ctx, key, time.Duration(loginFailWindowSec)*time.Second)
+		} else if count >= int64(loginFailThreshold) {
+			common.RDB.Expire(ctx, key, time.Duration(loginFailLockoutSec)*time.Second)
+		}
 		return
 	}
-	if count == 1 {
-		common.RDB.Expire(ctx, key, time.Duration(loginFailWindowSec)*time.Second)
-	} else if count >= int64(loginFailThreshold) {
-		common.RDB.Expire(ctx, key, time.Duration(loginFailLockoutSec)*time.Second)
+	// memory fallback
+	now := time.Now()
+	loginFailMemMu.Lock()
+	defer loginFailMemMu.Unlock()
+	key := loginFailMemKey(username)
+	entry, ok := loginFailMem[key]
+	if !ok || now.Sub(entry.windowStart) > time.Duration(loginFailWindowSec)*time.Second {
+		entry = &loginFailEntry{count: 0, windowStart: now}
+		loginFailMem[key] = entry
+	}
+	entry.count++
+	if entry.count >= loginFailThreshold {
+		entry.lockedUntil = now.Add(time.Duration(loginFailLockoutSec) * time.Second)
 	}
 }
 
 // ClearLoginFailure 登录成功后清零失败计数。
 func ClearLoginFailure(username string) {
-	if !common.RedisEnabled || username == "" {
+	if username == "" {
+		return
+	}
+	if !common.RedisEnabled {
+		loginFailMemMu.Lock()
+		delete(loginFailMem, loginFailMemKey(username))
+		loginFailMemMu.Unlock()
 		return
 	}
 	common.RDB.Del(context.Background(), loginFailKey(username))
