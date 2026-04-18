@@ -73,10 +73,16 @@ var LOG_DB *gorm.DB
 
 func createRootAccountIfNeed() error {
 	var user User
-	//if user.Status != common.UserStatusEnabled {
 	if err := DB.First(&user).Error; err != nil {
-		common.SysLog("no user exists, create a root user for you: username is root, password is 123456")
-		hashedPassword, err := common.Password2Hash("123456")
+		// 初始化随机 root 密码；旧版本硬编码 "123456" 属于公开凭证，可导致部署后被直接接管。
+		// 允许通过 INITIAL_ROOT_PASSWORD 环境变量显式指定（便于自动化部署）；否则生成 24 字符随机串。
+		plain := strings.TrimSpace(os.Getenv("INITIAL_ROOT_PASSWORD"))
+		generated := false
+		if plain == "" {
+			plain = common.GetRandomString(24)
+			generated = true
+		}
+		hashedPassword, err := common.Password2Hash(plain)
 		if err != nil {
 			return err
 		}
@@ -89,9 +95,33 @@ func createRootAccountIfNeed() error {
 			AccessToken: nil,
 			Quota:       100000000,
 		}
-		DB.Create(&rootUser)
+		if err := DB.Create(&rootUser).Error; err != nil {
+			return err
+		}
+		if generated {
+			// 写入 logs/initial-root-password.txt（0600）；屏幕仅打印提示，不落盘明文到 SysLog。
+			if werr := writeInitialRootPassword(plain); werr != nil {
+				common.SysLog(fmt.Sprintf("WARNING: failed to persist initial root password to file (%s); printing to stdout ONCE: root / %s", werr.Error(), plain))
+			} else {
+				common.SysLog("SECURITY: initial root password written to logs/initial-root-password.txt (mode 0600). Please login, change the password, then delete that file.")
+			}
+		} else {
+			common.SysLog("SECURITY: root user created with password from INITIAL_ROOT_PASSWORD env. Rotate it after first login.")
+		}
 	}
 	return nil
+}
+
+// writeInitialRootPassword 把初始随机密码写入 logs/initial-root-password.txt，
+// 仅对拥有者可读写（0600）。仅在初次建库时调用一次。
+func writeInitialRootPassword(plain string) error {
+	dir := "logs"
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	path := dir + string(os.PathSeparator) + "initial-root-password.txt"
+	content := fmt.Sprintf("username: root\npassword: %s\n\n# 请在首次登录后立即修改密码，然后删除此文件。\n", plain)
+	return os.WriteFile(path, []byte(content), 0o600)
 }
 
 func CheckSetup() {
