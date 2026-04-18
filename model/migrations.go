@@ -53,11 +53,6 @@ func AddForeignKeys() error {
 		common.SysError("failed to add foreign key for tasks.user_id: " + err.Error())
 	}
 
-	// Add foreign keys for Subscription table
-	if err := addForeignKey(DB, "subscriptions", "user_id", "users", "id", "CASCADE", "CASCADE"); err != nil {
-		common.SysError("failed to add foreign key for subscriptions.user_id: " + err.Error())
-	}
-
 	common.SysLog("Foreign key constraints added successfully")
 	return nil
 }

@@ -99,12 +99,6 @@ quota.insufficient: "额度不足"
 quota.warning_invalid: "无效的预警类型"
 quota.threshold_gt_zero: "预警阈值必须大于0"
 
-# Subscription messages
-
-# Payment messages
-
-# Topup messages
-
 # Channel messages
 channel.not_exists: "渠道不存在"
 channel.id_format_error: "渠道ID格式错误"

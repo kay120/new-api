@@ -98,12 +98,6 @@ quota.insufficient: "Insufficient quota"
 quota.warning_invalid: "Invalid warning type"
 quota.threshold_gt_zero: "Warning threshold must be greater than 0"
 
-# Subscription messages
-
-# Payment messages
-
-# Topup messages
-
 # Channel messages
 channel.not_exists: "Channel does not exist"
 channel.id_format_error: "Channel ID format error"
