@@ -570,38 +570,10 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string) error {
 	return nil
 }
 
-func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
-	if tx == nil || order == nil {
-		return errors.New("invalid subscription order")
-	}
-	now := common.GetTimestamp()
-	var topup TopUp
-	if err := tx.Where("trade_no = ?", order.TradeNo).First(&topup).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			topup = TopUp{
-				UserId:        order.UserId,
-				Amount:        0,
-				Money:         order.Money,
-				TradeNo:       order.TradeNo,
-				PaymentMethod: order.PaymentMethod,
-				CreateTime:    order.CreateTime,
-				CompleteTime:  now,
-				Status:        common.TopUpStatusSuccess,
-			}
-			return tx.Create(&topup).Error
-		}
-		return err
-	}
-	topup.Money = order.Money
-	if topup.PaymentMethod == "" {
-		topup.PaymentMethod = order.PaymentMethod
-	}
-	if topup.CreateTime == 0 {
-		topup.CreateTime = order.CreateTime
-	}
-	topup.CompleteTime = now
-	topup.Status = common.TopUpStatusSuccess
-	return tx.Save(&topup).Error
+// upsertSubscriptionTopUpTx 已废弃：top_up 表在企业内部模式下被移除。保留空实现仅为
+// 保持 CompleteSubscriptionOrder 的调用路径兼容，该订阅流程本身也已无路由触发。
+func upsertSubscriptionTopUpTx(_ *gorm.DB, _ *SubscriptionOrder) error {
+	return nil
 }
 
 func ExpireSubscriptionOrder(tradeNo string) error {

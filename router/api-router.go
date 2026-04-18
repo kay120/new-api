@@ -77,10 +77,6 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/passkey/verify/finish", auth.PasskeyVerifyFinish)
 				selfRoute.DELETE("/passkey", auth.PasskeyDelete)
 				selfRoute.GET("/aff", userctl.GetAffCode)
-				selfRoute.GET("/topup/info", billing.GetTopUpInfo)
-				selfRoute.GET("/topup/self", billing.GetUserTopUps)
-				selfRoute.POST("/topup", middleware.CriticalRateLimit(), userctl.TopUp)
-				selfRoute.POST("/amount", billing.RequestAmount)
 				selfRoute.PUT("/setting", userctl.UpdateUserSetting)
 
 				// 2FA routes
@@ -96,8 +92,6 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.Use(middleware.AdminAuth())
 			{
 				adminRoute.GET("/", userctl.GetAllUsers)
-				adminRoute.GET("/topup", billing.GetAllTopUps)
-				adminRoute.POST("/topup/complete", billing.AdminCompleteTopUp)
 				adminRoute.GET("/search", userctl.SearchUsers)
 				adminRoute.DELETE("/:id/bindings/:binding_type", userctl.AdminClearUserBinding)
 				adminRoute.GET("/:id", userctl.GetUser)
@@ -111,30 +105,6 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/2fa/stats", auth.Admin2FAStats)
 				adminRoute.DELETE("/:id/2fa", auth.AdminDisable2FA)
 			}
-		}
-
-		// Subscription billing (plans, purchase, admin management)
-		subscriptionRoute := apiRouter.Group("/subscription")
-		subscriptionRoute.Use(middleware.UserAuth())
-		{
-			subscriptionRoute.GET("/plans", billing.GetSubscriptionPlans)
-			subscriptionRoute.GET("/self", billing.GetSubscriptionSelf)
-			subscriptionRoute.PUT("/self/preference", billing.UpdateSubscriptionPreference)
-		}
-		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
-		subscriptionAdminRoute.Use(middleware.AdminAuth())
-		{
-			subscriptionAdminRoute.GET("/plans", billing.AdminListSubscriptionPlans)
-			subscriptionAdminRoute.POST("/plans", billing.AdminCreateSubscriptionPlan)
-			subscriptionAdminRoute.PUT("/plans/:id", billing.AdminUpdateSubscriptionPlan)
-			subscriptionAdminRoute.PATCH("/plans/:id", billing.AdminUpdateSubscriptionPlanStatus)
-			subscriptionAdminRoute.POST("/bind", billing.AdminBindSubscription)
-
-			// User subscription management (admin)
-			subscriptionAdminRoute.GET("/users/:id/subscriptions", billing.AdminListUserSubscriptions)
-			subscriptionAdminRoute.POST("/users/:id/subscriptions", billing.AdminCreateUserSubscription)
-			subscriptionAdminRoute.POST("/user_subscriptions/:id/invalidate", billing.AdminInvalidateUserSubscription)
-			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", billing.AdminDeleteUserSubscription)
 		}
 
 		optionRoute := apiRouter.Group("/option")

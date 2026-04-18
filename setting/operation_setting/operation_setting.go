@@ -3,7 +3,11 @@ package operation_setting
 import "strings"
 
 var DemoSiteEnabled = false
-var SelfUseModeEnabled = false
+
+// SelfUseModeEnabled 企业内部模式开关（默认开启）。
+// 为 true 时：未配置倍率的模型仍可使用、无须要求每个模型都配置价格。
+// 计费扣费/额度检查已从 NewBillingSession 彻底移除，不再依赖此开关。
+var SelfUseModeEnabled = true
 
 var AutomaticDisableKeywords = []string{
 	"Your credit balance is too low",

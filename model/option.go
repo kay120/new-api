@@ -81,19 +81,9 @@ func InitOptionMap() {
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
 	common.OptionMap["WorkerAllowHttpImageRequestEnabled"] = strconv.FormatBool(system_setting.WorkerAllowHttpImageRequestEnabled)
-	common.OptionMap["CustomCallbackAddress"] = ""
-	common.OptionMap["Price"] = strconv.FormatFloat(operation_setting.Price, 'f', -1, 64)
-	common.OptionMap["USDExchangeRate"] = strconv.FormatFloat(operation_setting.USDExchangeRate, 'f', -1, 64)
-	common.OptionMap["MinTopUp"] = strconv.Itoa(operation_setting.MinTopUp)
-	common.OptionMap["CreemApiKey"] = setting.CreemApiKey
-	common.OptionMap["CreemProducts"] = setting.CreemProducts
-	common.OptionMap["CreemTestMode"] = strconv.FormatBool(setting.CreemTestMode)
-	common.OptionMap["CreemWebhookSecret"] = setting.CreemWebhookSecret
-	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
 	common.OptionMap["Chats"] = setting.Chats2JsonString()
 	common.OptionMap["AutoGroups"] = setting.AutoGroups2JsonString()
 	common.OptionMap["DefaultUseAutoGroup"] = strconv.FormatBool(setting.DefaultUseAutoGroup)
-	common.OptionMap["PayMethods"] = operation_setting.PayMethods2JsonString()
 	common.OptionMap["GitHubClientId"] = ""
 	common.OptionMap["GitHubClientSecret"] = ""
 	common.OptionMap["TelegramBotToken"] = ""
@@ -331,24 +321,10 @@ func updateOptionMap(key string, value string) (err error) {
 		err = setting.UpdateChatsByJsonString(value)
 	case "AutoGroups":
 		err = setting.UpdateAutoGroupsByJsonString(value)
-	case "CustomCallbackAddress":
-		operation_setting.CustomCallbackAddress = value
-	case "Price":
-		operation_setting.Price, _ = strconv.ParseFloat(value, 64)
 	case "USDExchangeRate":
 		operation_setting.USDExchangeRate, _ = strconv.ParseFloat(value, 64)
-	case "MinTopUp":
-		operation_setting.MinTopUp, _ = strconv.Atoi(value)
-	case "CreemApiKey":
-		setting.CreemApiKey = value
-	case "CreemProducts":
-		setting.CreemProducts = value
-	case "CreemTestMode":
-		setting.CreemTestMode = value == "true"
-	case "CreemWebhookSecret":
-		setting.CreemWebhookSecret = value
-	case "TopupGroupRatio":
-		err = common.UpdateTopupGroupRatioByJSONString(value)
+	case "Price":
+		operation_setting.Price, _ = strconv.ParseFloat(value, 64)
 	case "GitHubClientId":
 		common.GitHubClientId = value
 	case "GitHubClientSecret":
@@ -459,8 +435,6 @@ func updateOptionMap(key string, value string) (err error) {
 		err = operation_setting.AutomaticRetryStatusCodesFromString(value)
 	case "StreamCacheQueueLength":
 		setting.StreamCacheQueueLength, _ = strconv.Atoi(value)
-	case "PayMethods":
-		err = operation_setting.UpdatePayMethodsByJsonString(value)
 	}
 	return err
 }
