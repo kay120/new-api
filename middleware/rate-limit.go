@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -176,6 +177,65 @@ func userRedisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, key
 		c.Status(http.StatusTooManyRequests)
 		c.Abort()
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Login brute-force guard — per-username failure counter
+// ---------------------------------------------------------------------------
+
+const (
+	loginFailKeyPrefix = "loginFail:"
+	// 阈值：同一用户名 5 分钟内连续 8 次失败即锁定 15 分钟。
+	// 之所以比 IP 级 CriticalRateLimit 宽一点，是为了不误伤真人偶尔手滑；
+	// 锁定期足够长以阻止典型字典爆破。
+	loginFailThreshold  = 8
+	loginFailWindowSec  = 5 * 60
+	loginFailLockoutSec = 15 * 60
+)
+
+func loginFailKey(username string) string {
+	return loginFailKeyPrefix + strings.ToLower(strings.TrimSpace(username))
+}
+
+// LoginBruteForceLocked 判断指定用户名当前是否因连续失败被锁定。
+// Redis 未启用时降级为 false（不阻挡），此时依赖 IP 级 CriticalRateLimit 兜底。
+func LoginBruteForceLocked(username string) bool {
+	if !common.RedisEnabled || username == "" {
+		return false
+	}
+	ctx := context.Background()
+	val, err := common.RDB.Get(ctx, loginFailKey(username)).Int()
+	if err != nil {
+		return false
+	}
+	return val >= loginFailThreshold
+}
+
+// RecordLoginFailure 在验证失败后记一次失败，达到阈值时延长 TTL 为锁定期。
+func RecordLoginFailure(username string) {
+	if !common.RedisEnabled || username == "" {
+		return
+	}
+	ctx := context.Background()
+	key := loginFailKey(username)
+	count, err := common.RDB.Incr(ctx, key).Result()
+	if err != nil {
+		common.SysError("login brute-force counter incr failed: " + err.Error())
+		return
+	}
+	if count == 1 {
+		common.RDB.Expire(ctx, key, time.Duration(loginFailWindowSec)*time.Second)
+	} else if count >= int64(loginFailThreshold) {
+		common.RDB.Expire(ctx, key, time.Duration(loginFailLockoutSec)*time.Second)
+	}
+}
+
+// ClearLoginFailure 登录成功后清零失败计数。
+func ClearLoginFailure(username string) {
+	if !common.RedisEnabled || username == "" {
+		return
+	}
+	common.RDB.Del(context.Background(), loginFailKey(username))
 }
 
 // SearchRateLimit returns a per-user rate limiter for search endpoints.

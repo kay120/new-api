@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
@@ -45,18 +46,28 @@ func Login(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	// 用户名级 brute-force 锁：防止攻击者通过代理池绕过 IP 限流进行字典爆破
+	if middleware.LoginBruteForceLocked(username) {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"message": "该账号登录失败次数过多，已临时锁定，请稍后再试。",
+			"success": false,
+		})
+		return
+	}
 	user := model.User{
 		Username: username,
 		Password: password,
 	}
 	err = user.ValidateAndFill()
 	if err != nil {
+		middleware.RecordLoginFailure(username)
 		c.JSON(http.StatusOK, gin.H{
 			"message": err.Error(),
 			"success": false,
 		})
 		return
 	}
+	middleware.ClearLoginFailure(username)
 
 	// 检查是否启用2FA
 	if model.IsTwoFAEnabled(user.Id) {

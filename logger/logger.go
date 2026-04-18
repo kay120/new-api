@@ -170,6 +170,21 @@ func FormatQuota(quota int) string {
 	}
 }
 
+// SafeRequestBody 用于 DEBUG 日志输出请求体。默认截断到 1024 字节以避免
+// 超长 prompt / 含敏感数据的 body 完整落盘。设置 LOG_RELAY_BODY_FULL=true
+// 环境变量可获取完整内容（例：本地排查复杂请求）。
+func SafeRequestBody(body []byte) string {
+	const defaultLimit = 1024
+	if os.Getenv("LOG_RELAY_BODY_FULL") == "true" {
+		return string(body)
+	}
+	if len(body) <= defaultLimit {
+		return string(body)
+	}
+	return fmt.Sprintf("%s ...[truncated, %d bytes total; set LOG_RELAY_BODY_FULL=true to see full body]",
+		string(body[:defaultLimit]), len(body))
+}
+
 // LogJson 仅供测试使用 only for test
 func LogJson(ctx context.Context, msg string, obj any) {
 	jsonStr, err := common.Marshal(obj)
