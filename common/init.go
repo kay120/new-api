@@ -55,6 +55,17 @@ func InitEnv() {
 		} else {
 			SessionSecret = ss
 		}
+	} else {
+		// 未设 env 时，把运行期随机 secret 持久化到 logs/session_secret，
+		// 下次启动复用，避免每次重启 session 被全量失效。
+		// 生产部署仍推荐通过 SESSION_SECRET 环境变量显式配置。
+		if persisted, err := loadOrCreatePersistedSecret("logs/session_secret"); err == nil && persisted != "" {
+			SessionSecret = persisted
+			log.Println("WARNING: SESSION_SECRET env not set; using persisted secret at logs/session_secret. Set SESSION_SECRET for production.")
+			log.Println("警告：未设置 SESSION_SECRET 环境变量，已使用 logs/session_secret 持久化 secret。生产部署请配置 SESSION_SECRET。")
+		} else {
+			log.Printf("WARNING: SESSION_SECRET env not set and persist failed (%v); sessions will not survive restart", err)
+		}
 	}
 	if os.Getenv("CRYPTO_SECRET") != "" {
 		CryptoSecret = os.Getenv("CRYPTO_SECRET")
@@ -178,4 +189,25 @@ func initConstantEnv() {
 		}
 	}
 	constant.TrustedRedirectDomains = trustedDomains
+}
+
+
+// loadOrCreatePersistedSecret 读取指定路径的 secret 文件；不存在时生成
+// 新的 32 字符随机 secret 并写入，文件权限 0600，父目录 0700。
+// 用于 session secret 持久化，避免每次进程重启 session 失效。
+func loadOrCreatePersistedSecret(path string) (string, error) {
+	if data, err := os.ReadFile(path); err == nil {
+		if s := strings.TrimSpace(string(data)); s != "" {
+			return s, nil
+		}
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	secret := GetRandomString(32)
+	if err := os.WriteFile(path, []byte(secret), 0o600); err != nil {
+		return "", err
+	}
+	return secret, nil
 }
