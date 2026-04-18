@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -31,21 +32,6 @@ func AddForeignKeys() error {
 	// Add foreign keys for Ability table
 	if err := addForeignKey(DB, "abilities", "channel_id", "channels", "id", "CASCADE", "CASCADE"); err != nil {
 		common.SysError("failed to add foreign key for abilities.channel_id: " + err.Error())
-	}
-
-	// Add foreign keys for TopUp table
-	if err := addForeignKey(DB, "topups", "user_id", "users", "id", "CASCADE", "CASCADE"); err != nil {
-		common.SysError("failed to add foreign key for topups.user_id: " + err.Error())
-	}
-
-	// Add foreign keys for Redemption table
-	if err := addForeignKey(DB, "redemptions", "user_id", "users", "id", "SET NULL", "CASCADE"); err != nil {
-		common.SysError("failed to add foreign key for redemptions.user_id: " + err.Error())
-	}
-
-	// Add foreign keys for CheckIn table
-	if err := addForeignKey(DB, "checkins", "user_id", "users", "id", "CASCADE", "CASCADE"); err != nil {
-		common.SysError("failed to add foreign key for checkins.user_id: " + err.Error())
 	}
 
 	// Add foreign keys for Task table
@@ -113,12 +99,70 @@ func CreateIndexes() error {
 	return nil
 }
 
+// legacyTablesToDrop 是支付/订阅/兑换/midjourney/checkin 等已瘦身功能遗留的表。
+// 这些表在老部署里会占空间且可能有过期外键，但 GORM AutoMigrate 不会主动删。
+// dropLegacyTables 会一次性 DROP，并在 options 表写入 marker 防止重复执行。
+var legacyTablesToDrop = []string{
+	"subscription_plans",
+	"subscription_orders",
+	"user_subscriptions",
+	"subscription_pre_consume_records",
+	"top_ups",
+	"topups",
+	"redemptions",
+	"midjourneys",
+	"checkins",
+}
+
+const legacyDropMarkerKey = "_legacy_tables_dropped_at"
+
+// dropLegacyTables 幂等地移除历史瘦身遗留表；marker 由 options 表记录。
+// SQLite 也适用（CREATE/DROP TABLE IF EXISTS 通用）。
+func dropLegacyTables() error {
+	if DB == nil {
+		return nil
+	}
+	// 检查 marker：已跑过则 skip
+	var existing Option
+	if err := DB.Where("`key` = ?", legacyDropMarkerKey).First(&existing).Error; err == nil && existing.Value != "" {
+		return nil
+	}
+
+	dropped := make([]string, 0, len(legacyTablesToDrop))
+	for _, tbl := range legacyTablesToDrop {
+		// 安全：tbl 来自硬编码白名单，不是用户输入
+		if !DB.Migrator().HasTable(tbl) {
+			continue
+		}
+		if err := DB.Migrator().DropTable(tbl); err != nil {
+			common.SysError(fmt.Sprintf("dropLegacyTables: failed to drop %s: %v", tbl, err))
+			continue
+		}
+		dropped = append(dropped, tbl)
+	}
+
+	// 写 marker 防重（即使本次无表可删，也落一次防后续重试）
+	if err := DB.Save(&Option{Key: legacyDropMarkerKey, Value: fmt.Sprintf("%d", time.Now().Unix())}).Error; err != nil {
+		common.SysError("dropLegacyTables: failed to write marker: " + err.Error())
+	}
+
+	if len(dropped) > 0 {
+		common.SysLog(fmt.Sprintf("dropLegacyTables: dropped %d legacy tables: %v", len(dropped), dropped))
+	}
+	return nil
+}
+
 // RunDatabaseOptimizations runs all database optimization tasks
 func RunDatabaseOptimizations() {
 	go func() {
 		// Wait for database to be fully initialized
 		if DB == nil {
 			return
+		}
+
+		// 清理瘦身遗留的废弃表（订阅 / 充值 / 兑换 / midjourney / checkin）
+		if err := dropLegacyTables(); err != nil {
+			common.SysError("Failed to drop legacy tables: " + err.Error())
 		}
 
 		// Add foreign keys
