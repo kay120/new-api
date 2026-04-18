@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	BillingSourceWallet       = "wallet"
-	BillingSourceSubscription = "subscription"
+	BillingSourceWallet = "wallet"
 )
 
 // PreConsumeBilling 根据用户计费偏好创建 BillingSession 并执行预扣费。
@@ -58,13 +57,8 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			return err
 		}
 
-		// 发送额度通知（订阅计费使用订阅剩余额度）
 		if actualQuota != 0 {
-			if relayInfo.BillingSource == BillingSourceSubscription {
-				checkAndSendSubscriptionQuotaNotify(relayInfo)
-			} else {
-				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
-			}
+			checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
 		}
 		return nil
 	}

@@ -35,6 +35,8 @@ const (
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
+	ErrNoActiveSubscription           = errors.New("no active subscription")
+	ErrSubscriptionQuotaInsufficient  = errors.New("subscription quota insufficient")
 )
 
 const (
@@ -965,10 +967,10 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
 			Order("end_time asc, id asc").
 			Find(&subs).Error; err != nil {
-			return errors.New("no active subscription")
+			return ErrNoActiveSubscription
 		}
 		if len(subs) == 0 {
-			return errors.New("no active subscription")
+			return ErrNoActiveSubscription
 		}
 		for _, candidate := range subs {
 			sub := candidate
@@ -1019,7 +1021,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			returnValue.AmountUsedAfter = sub.AmountUsed
 			return nil
 		}
-		return fmt.Errorf("subscription quota insufficient, need=%d", amount)
+		return fmt.Errorf("%w: need=%d", ErrSubscriptionQuotaInsufficient, amount)
 	})
 	if err != nil {
 		return nil, err

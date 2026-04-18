@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
@@ -73,10 +72,6 @@ func (s *BillingSession) Settle(actualQuota int) error {
 				s.relayInfo.UserId, s.relayInfo.TokenId, delta, tokenErr.Error()))
 		}
 	}
-	// 3) 更新 relayInfo 上的订阅 PostDelta（用于日志）
-	if s.funding.Source() == BillingSourceSubscription {
-		s.relayInfo.SubscriptionPostDelta += int64(delta)
-	}
 	s.settled = true
 	return tokenErr
 }
@@ -135,14 +130,7 @@ func (s *BillingSession) needsRefundLocked() bool {
 		// fundingSettled 时资金来源已提交结算，不能再退预扣费
 		return false
 	}
-	if s.tokenConsumed > 0 {
-		return true
-	}
-	// 订阅可能在 tokenConsumed=0 时仍预扣了额度
-	if sub, ok := s.funding.(*SubscriptionFunding); ok && sub.preConsumed > 0 {
-		return true
-	}
-	return false
+	return s.tokenConsumed > 0
 }
 
 // GetPreConsumedQuota 返回实际预扣的额度。
@@ -185,11 +173,6 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 			}
 			s.tokenConsumed = 0
 		}
-		// TODO: model 层应定义哨兵错误（如 ErrNoActiveSubscription），用 errors.Is 替代字符串匹配
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
-			return types.NewErrorWithStatusCode(fmt.Errorf("订阅额度不足或未配置订阅: %s", errMsg), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
-		}
 		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 	}
 
@@ -201,19 +184,15 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 	return nil
 }
 
-// shouldTrust 统一信任额度检查，适用于钱包和订阅。
+// shouldTrust 判断是否可启用信任额度旁路（令牌与钱包额度均充足时可跳过预扣）。
 func (s *BillingSession) shouldTrust(c *gin.Context) bool {
-	// 异步任务（ForcePreConsume=true）必须预扣全额，不允许信任旁路
 	if s.relayInfo.ForcePreConsume {
 		return false
 	}
-
 	trustQuota := common.GetTrustQuota()
 	if trustQuota <= 0 {
 		return false
 	}
-
-	// 检查令牌是否充足
 	tokenTrusted := s.relayInfo.TokenUnlimited
 	if !tokenTrusted {
 		tokenQuota := c.GetInt("token_quota")
@@ -222,19 +201,7 @@ func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 	if !tokenTrusted {
 		return false
 	}
-
-	switch s.funding.Source() {
-	case BillingSourceWallet:
-		return s.relayInfo.UserQuota > trustQuota
-	case BillingSourceSubscription:
-		// 订阅不能启用信任旁路。原因：
-		// 1. PreConsumeUserSubscription 要求 amount>0 来创建预扣记录并锁定订阅
-		// 2. SubscriptionFunding.PreConsume 忽略参数，始终用 s.amount 预扣
-		// 3. 若信任旁路将 effectiveQuota 设为 0，会导致 preConsumedQuota 与实际订阅预扣不一致
-		return false
-	default:
-		return false
-	}
+	return s.relayInfo.UserQuota > trustQuota
 }
 
 // syncRelayInfo 将 BillingSession 的状态同步到 RelayInfo 的兼容字段上。
@@ -242,19 +209,6 @@ func (s *BillingSession) syncRelayInfo() {
 	info := s.relayInfo
 	info.FinalPreConsumedQuota = s.preConsumedQuota
 	info.BillingSource = s.funding.Source()
-
-	if sub, ok := s.funding.(*SubscriptionFunding); ok {
-		info.SubscriptionId = sub.subscriptionId
-		info.SubscriptionPreConsumed = sub.preConsumed
-		info.SubscriptionPostDelta = 0
-		info.SubscriptionAmountTotal = sub.AmountTotal
-		info.SubscriptionAmountUsedAfterPreConsume = sub.AmountUsedAfter
-		info.SubscriptionPlanId = sub.PlanId
-		info.SubscriptionPlanTitle = sub.PlanTitle
-	} else {
-		info.SubscriptionId = 0
-		info.SubscriptionPreConsumed = 0
-	}
 }
 
 // ---------------------------------------------------------------------------
