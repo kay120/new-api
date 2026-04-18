@@ -25,6 +25,12 @@ var commonFalseVal string
 var logKeyCol string
 var logGroupCol string
 
+// InitColumnNamesForTesting 初始化 SQL 列名别名（commonKeyCol / commonGroupCol 等），
+// 仅供不走 InitDB() 的测试代码（如内存 SQLite 单测）使用。
+func InitColumnNamesForTesting() {
+	initCol()
+}
+
 func initCol() {
 	// init common column names
 	if common.UsingPostgreSQL {

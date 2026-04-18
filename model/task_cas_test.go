@@ -26,6 +26,7 @@ func TestMain(m *testing.M) {
 	common.RedisEnabled = false
 	common.BatchUpdateEnabled = false
 	common.LogConsumeEnabled = true
+	InitColumnNamesForTesting()
 
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -33,7 +34,7 @@ func TestMain(m *testing.M) {
 	}
 	sqlDB.SetMaxOpenConns(1)
 
-	if err := db.AutoMigrate(&Task{}, &User{}, &Token{}, &Log{}, &Channel{}); err != nil {
+	if err := db.AutoMigrate(&Task{}, &User{}, &Token{}, &Log{}, &Channel{}, &Ability{}); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
 
