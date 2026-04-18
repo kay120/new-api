@@ -27,6 +27,31 @@ type ModelRequest struct {
 	Group string `json:"group,omitempty"`
 }
 
+// channelOtherContextKey 声明各 channel 类型下 channel.Other 字段在 Gin
+// 上下文中的存放 key。这是 per-channel 的约定——Azure / Xunfei / Gemini /
+// Cloudflare / MokaAI 都把 channel.Other 当作 API version 使用，Vertex AI 则
+// 作为 region，阿里作为 plugin，Coze 作为 bot_id。
+//
+// 维护指引：新增 channel 类型时在此处注册一行即可；不需要再改
+// SetupContextForSelectedChannel。未注册的类型不会向 context 注入任何内容。
+var channelOtherContextKey = map[int]string{
+	constant.ChannelTypeAzure:      "api_version",
+	constant.ChannelTypeVertexAi:   "region",
+	constant.ChannelTypeXunfei:     "api_version",
+	constant.ChannelTypeGemini:     "api_version",
+	constant.ChannelTypeAli:        "plugin",
+	constant.ChannelCloudflare:     "api_version",
+	constant.ChannelTypeMokaAI:     "api_version",
+	constant.ChannelTypeCoze:       "bot_id",
+}
+
+// applyChannelOther 根据渠道类型把 channel.Other 按约定写入 Gin 上下文。
+func applyChannelOther(c *gin.Context, channel *model.Channel) {
+	if key, ok := channelOtherContextKey[channel.Type]; ok {
+		c.Set(key, channel.Other)
+	}
+}
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var channel *model.Channel
@@ -366,25 +391,7 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, false)
 
-	// TODO: api_version统一
-	switch channel.Type {
-	case constant.ChannelTypeAzure:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeVertexAi:
-		c.Set("region", channel.Other)
-	case constant.ChannelTypeXunfei:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeGemini:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeAli:
-		c.Set("plugin", channel.Other)
-	case constant.ChannelCloudflare:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeMokaAI:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeCoze:
-		c.Set("bot_id", channel.Other)
-	}
+	applyChannelOther(c, channel)
 	return nil
 }
 

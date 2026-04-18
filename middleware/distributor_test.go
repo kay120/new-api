@@ -144,6 +144,45 @@ func TestSetupContextForSelectedChannel_CozeInjectsBotId(t *testing.T) {
 	assert.Equal(t, "bot_12345", c.GetString("bot_id"))
 }
 
+// ===========================================================================
+// channelOtherContextKey 声明式映射表 — 变更前告警
+// ===========================================================================
+
+func TestChannelOtherContextKey_MapStable(t *testing.T) {
+	// 这张表定义了渠道 Other 字段的语义约定。新增渠道应同步加条目，
+	// 废弃渠道应同步删除。本用例锁定当前契约，变更时主动审视读侧是否跟上。
+	expected := map[int]string{
+		constant.ChannelTypeAzure:    "api_version",
+		constant.ChannelTypeVertexAi: "region",
+		constant.ChannelTypeXunfei:   "api_version",
+		constant.ChannelTypeGemini:   "api_version",
+		constant.ChannelTypeAli:      "plugin",
+		constant.ChannelCloudflare:   "api_version",
+		constant.ChannelTypeMokaAI:   "api_version",
+		constant.ChannelTypeCoze:     "bot_id",
+	}
+	assert.Equal(t, expected, channelOtherContextKey,
+		"如需增删渠道，请同步更新各 adapter 的读取点（c.GetString(api_version/region/plugin/bot_id)）")
+}
+
+func TestApplyChannelOther_UnknownTypeIsNoop(t *testing.T) {
+	c := newDistributorTestContext()
+	applyChannelOther(c, &model.Channel{Type: constant.ChannelTypeOpenAI, Other: "ignored"})
+
+	for _, key := range []string{"api_version", "region", "plugin", "bot_id"} {
+		assert.Empty(t, c.GetString(key), "未注册类型不应写入 %s", key)
+	}
+}
+
+func TestApplyChannelOther_EmptyOtherStillWrites(t *testing.T) {
+	// channel.Other 为空串也会被写入（保持与旧 switch 语义一致）；
+	// 下游 adapter 负责在值为空时的降级处理。
+	c := newDistributorTestContext()
+	applyChannelOther(c, &model.Channel{Type: constant.ChannelTypeAzure, Other: ""})
+	_, exists := c.Get("api_version")
+	assert.True(t, exists, "即使 Other 为空串也应写入 context key 以保持与旧行为一致")
+}
+
 func TestSetupContextForSelectedChannel_OtherTypeNoExtraInjection(t *testing.T) {
 	c := newDistributorTestContext()
 	ch := &model.Channel{
