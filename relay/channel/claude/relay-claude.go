@@ -1,10 +1,12 @@
 package claude
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -24,6 +26,60 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
+
+// buildClaudeFileMessage 把 OpenAI 的 `file` content 转换为 Claude content block：
+// - application/pdf → document block
+// - text/* → text block（解码 base64 为字符串）
+// - 其它 MIME → 跳过并记日志（Claude 不支持）
+func buildClaudeFileMessage(c *gin.Context, file *dto.MessageFile) (*dto.ClaudeMediaMessage, error) {
+	if file == nil || file.FileData == "" {
+		return nil, nil
+	}
+	mimeType := ""
+	if ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(file.FileName)), "."); ext != "" {
+		if detected := service.GetMimeTypeByExtension(ext); detected != "application/octet-stream" {
+			mimeType = detected
+		}
+	}
+	var source types.FileSource
+	if strings.HasPrefix(file.FileData, "http://") || strings.HasPrefix(file.FileData, "https://") {
+		source = types.NewURLFileSource(file.FileData)
+	} else {
+		source = types.NewBase64FileSource(file.FileData, mimeType)
+	}
+	base64Data, resolvedMime, err := service.GetBase64Data(c, source, "formatting document for Claude")
+	if err != nil {
+		return nil, fmt.Errorf("get file data failed: %w", err)
+	}
+	switch {
+	case strings.HasPrefix(resolvedMime, "application/pdf"):
+		return &dto.ClaudeMediaMessage{
+			Type: "document",
+			Source: &dto.ClaudeMessageSource{
+				Type:      "base64",
+				MediaType: resolvedMime,
+				Data:      base64Data,
+			},
+		}, nil
+	case strings.HasPrefix(resolvedMime, "text/"):
+		decoded, decErr := base64.StdEncoding.DecodeString(base64Data)
+		if decErr != nil {
+			return nil, fmt.Errorf("decode text file data failed: %w", decErr)
+		}
+		return &dto.ClaudeMediaMessage{
+			Type: "text",
+			Text: common.GetPointer(string(decoded)),
+		}, nil
+	default:
+		msg := fmt.Sprintf("claude: skip unsupported file content, filename=%q, mime=%q", file.FileName, resolvedMime)
+		if c != nil {
+			logger.LogInfo(c, msg)
+		} else {
+			common.SysLog(msg)
+		}
+		return nil, nil
+	}
+}
 
 const (
 	WebSearchMaxUsesLow    = 1
@@ -349,6 +405,14 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 							Type: "text",
 							Text: common.GetPointer[string](mediaMessage.Text),
 						})
+					case dto.ContentTypeFile:
+						built, err := buildClaudeFileMessage(c, mediaMessage.GetFile())
+						if err != nil {
+							return nil, err
+						}
+						if built != nil {
+							claudeMediaMessages = append(claudeMediaMessages, *built)
+						}
 					default:
 						source := mediaMessage.ToFileSource()
 						if source == nil {
@@ -372,7 +436,6 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 						claudeMediaMessage.Source.MediaType = mimeType
 						claudeMediaMessage.Source.Data = base64Data
 						claudeMediaMessages = append(claudeMediaMessages, claudeMediaMessage)
-						continue
 					}
 				}
 
