@@ -38,6 +38,13 @@ func RecordAuditLog(userId int, username, action, resource, resourceId, detail, 
 	}()
 }
 
+// PurgeAuditLogsOlderThan 删除 created_at < cutoffUnix 的审计日志，返回删除行数。
+// 用于按保留期定期清理，避免表无限增长。
+func PurgeAuditLogsOlderThan(cutoffUnix int64) (int64, error) {
+	res := DB.Where("created_at < ?", cutoffUnix).Delete(&AuditLog{})
+	return res.RowsAffected, res.Error
+}
+
 // QueryAuditLogs 查询审计日志（分页）
 func QueryAuditLogs(page, pageSize int, filters map[string]string) ([]AuditLog, int64, error) {
 	var logs []AuditLog
