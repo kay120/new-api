@@ -70,23 +70,38 @@ func StartAuditLogRetentionTask() {
 	})
 }
 
+// TaskNameAuditLogRetention 统一任务名。
+const TaskNameAuditLogRetention = "audit_log_retention"
+
+// TriggerAuditLogPurge 与定时任务共用保留策略的手动触发入口。
+func TriggerAuditLogPurge() (int64, error) {
+	days := getAuditLogRetentionDays()
+	if days <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
+	return model.PurgeAuditLogsOlderThan(cutoff)
+}
+
 func runAuditLogPurgeOnce() {
 	if !auditLogPurgeRunning.CompareAndSwap(false, true) {
-		return // 上一轮还没跑完
+		return
 	}
 	defer auditLogPurgeRunning.Store(false)
 
-	days := getAuditLogRetentionDays()
-	if days <= 0 {
-		return
-	}
-	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
-	deleted, err := model.PurgeAuditLogsOlderThan(cutoff)
-	if err != nil {
-		common.SysError("audit log purge failed: " + err.Error())
-		return
-	}
-	if deleted > 0 {
-		common.SysLog(fmt.Sprintf("audit log purge: deleted %d rows older than %d days", deleted, days))
-	}
+	model.RecordTaskRun(TaskNameAuditLogRetention, func() (int64, error) {
+		days := getAuditLogRetentionDays()
+		if days <= 0 {
+			return 0, nil
+		}
+		cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
+		deleted, err := model.PurgeAuditLogsOlderThan(cutoff)
+		if err != nil {
+			return 0, err
+		}
+		if deleted > 0 {
+			common.SysLog(fmt.Sprintf("audit log purge: deleted %d rows older than %d days", deleted, days))
+		}
+		return deleted, nil
+	})
 }

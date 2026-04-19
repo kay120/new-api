@@ -57,60 +57,55 @@ func StartSummaryRollupTask() {
 	})
 }
 
-// runDailyRollupIfDue 决策是否该 rollup：
-//   - 如果 summary_daily 为空：从 logs 最早一天开始全量回填到昨天
-//   - 否则：rollup [latest-safety, yesterday] 这个窗口（覆盖）
-//
-// 幂等：多次调用安全。
+// TaskNameSummaryRollup 是统一任务名，用于 TaskRun 记录和前端 ops 页面。
+const TaskNameSummaryRollup = "summary_rollup"
+
+// runDailyRollupIfDue 决策是否该 rollup，每次执行通过 RecordTaskRun 写入 task_runs 表。
 func runDailyRollupIfDue() {
 	if !rollupRunning.CompareAndSwap(false, true) {
 		return
 	}
 	defer rollupRunning.Store(false)
 
-	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	model.RecordTaskRun(TaskNameSummaryRollup, func() (int64, error) {
+		now := time.Now()
+		todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	// 决定起点
-	latestStr, _ := model.LatestSummaryDate()
-	var startDay time.Time
-	if latestStr == "" {
-		// 首次：从最早 log 开始
-		earliest, err := model.EarliestLogDate()
+		latestStr, _ := model.LatestSummaryDate()
+		var startDay time.Time
+		if latestStr == "" {
+			earliest, err := model.EarliestLogDate()
+			if err != nil {
+				return 0, fmt.Errorf("earliest log lookup: %w", err)
+			}
+			if earliest.IsZero() {
+				return 0, nil
+			}
+			startDay = time.Date(earliest.Year(), earliest.Month(), earliest.Day(), 0, 0, 0, 0, earliest.Location())
+		} else {
+			t, err := time.Parse("2006-01-02", latestStr)
+			if err != nil {
+				return 0, fmt.Errorf("parse latest date %q: %w", latestStr, err)
+			}
+			startDay = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location()).
+				AddDate(0, 0, -rollupSafetyBackfill)
+		}
+
+		endUnix := todayStart.Unix()
+		startUnix := startDay.Unix()
+		if startUnix >= endUnix {
+			return 0, nil
+		}
+
+		affected, err := model.RollupLogsToSummary(startUnix, endUnix)
 		if err != nil {
-			common.SysError("rollup: earliest log lookup failed: " + err.Error())
-			return
+			return 0, fmt.Errorf("rollup %s ~ %s: %w",
+				startDay.Format("2006-01-02"), todayStart.Format("2006-01-02"), err)
 		}
-		if earliest.IsZero() {
-			return // 没有历史 logs
-		}
-		startDay = time.Date(earliest.Year(), earliest.Month(), earliest.Day(), 0, 0, 0, 0, earliest.Location())
-	} else {
-		t, err := time.Parse("2006-01-02", latestStr)
-		if err != nil {
-			common.SysError("rollup: parse latest date failed: " + err.Error())
-			return
-		}
-		// 回退 safety 天重跑（允许历史数据迟到补入）
-		startDay = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location()).
-			AddDate(0, 0, -rollupSafetyBackfill)
-	}
-
-	// 结束点：今天 00:00（不含当天）
-	endUnix := todayStart.Unix()
-	startUnix := startDay.Unix()
-	if startUnix >= endUnix {
-		return
-	}
-
-	affected, err := model.RollupLogsToSummary(startUnix, endUnix)
-	if err != nil {
-		common.SysError(fmt.Sprintf("rollup failed [%s ~ %s]: %v",
-			startDay.Format("2006-01-02"), todayStart.Format("2006-01-02"), err))
-		return
-	}
-	common.SysLog(fmt.Sprintf("rollup done: [%s ~ %s) wrote/updated %d rows",
-		startDay.Format("2006-01-02"), todayStart.Format("2006-01-02"), affected))
+		common.SysLog(fmt.Sprintf("rollup done: [%s ~ %s) wrote/updated %d rows",
+			startDay.Format("2006-01-02"), todayStart.Format("2006-01-02"), affected))
+		return affected, nil
+	})
 }
 
 // TriggerRollupBackfill 供管理员手动触发：强制 rollup 从指定起点到今天 00:00。

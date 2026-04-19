@@ -339,5 +339,14 @@ func SetApiRouter(router *gin.Engine) {
 		}
 		// Export route (no session auth needed, uses UserAuth)
 		apiRouter.GET("/report/export", middleware.UserAuth(), observability.ExportReportCSV)
+
+		// 数据运维：后台定时任务状态与手动触发（admin only）
+		opsRoute := apiRouter.Group("/ops")
+		opsRoute.Use(middleware.AdminAuth())
+		{
+			opsRoute.GET("/tasks", observability.GetOpsTasks)
+			opsRoute.GET("/tasks/:name/runs", observability.GetOpsTaskRuns)
+			opsRoute.POST("/tasks/:name/trigger", observability.TriggerOpsTask)
+		}
 	}
 }
