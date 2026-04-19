@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -78,6 +79,36 @@ func GetReportByUser(c *gin.Context) {
 	}
 
 	common.ApiSuccess(c, stats)
+}
+
+// GetReportHourlyToday 今天 0-23 小时的请求 / tokens 分布（本地时区，固定 24 条）。
+func GetReportHourlyToday(c *gin.Context) {
+	groupFilter := c.Query("group")
+	if !isReportAdmin(c) && groupFilter == "" {
+		groupFilter = c.GetString("group")
+	}
+	rows, err := model.GetHourlyStatsToday(groupFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rows)
+}
+
+// TriggerReportRollup 供管理员手动回填 summary_daily。
+// Query: days=N 表示只回填最近 N 天；不传则回填全部历史。
+func TriggerReportRollup(c *gin.Context) {
+	if !isReportAdmin(c) {
+		common.ApiError(c, fmt.Errorf("需要管理员权限"))
+		return
+	}
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "0"))
+	n, err := service.TriggerRollupBackfill(days)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"rows_written": n})
 }
 
 // GetReportModelUserBreakdown 返回时间窗内 (model, user) 完整聚合，
