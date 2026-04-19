@@ -790,19 +790,20 @@ func UpdateSelf(c *gin.Context) {
 }
 
 func checkUpdatePassword(originalPassword string, newPassword string, userId int) (updatePassword bool, err error) {
+	// 不打算修改密码（仅改 display_name 等其他字段）就直接放行，
+	// 避免误触 "原密码错误"。改密码时才需要 originalPassword 非空并校验。
+	if newPassword == "" {
+		return
+	}
 	var currentUser *model.User
 	currentUser, err = model.GetUserById(userId, true)
 	if err != nil {
 		return
 	}
 
-	// 密码不为空,需要验证原密码
-	// 支持第一次账号绑定时原密码为空的情况
-	if !common.ValidatePasswordAndHash(originalPassword, currentUser.Password) && currentUser.Password != "" {
+	// 首次账号绑定允许 currentUser.Password 为空（此时无需校验原密码）
+	if currentUser.Password != "" && !common.ValidatePasswordAndHash(originalPassword, currentUser.Password) {
 		err = fmt.Errorf("原密码错误")
-		return
-	}
-	if newPassword == "" {
 		return
 	}
 	updatePassword = true
