@@ -131,6 +131,62 @@ func GetReportModelUserBreakdown(c *gin.Context) {
 	common.ApiSuccess(c, rows)
 }
 
+// GetReportByToken 时间窗内按 token (API key) 聚合：请求量 / tokens / 失败数 / 最后使用时间。
+// "活跃 Key Top 10" 数据源。
+func GetReportByToken(c *gin.Context) {
+	groupFilter := c.Query("group")
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+
+	if !isReportAdmin(c) && groupFilter == "" {
+		groupFilter = c.GetString("group")
+	}
+
+	rows, err := model.GetTokenBreakdown(startTimestamp, endTimestamp, groupFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rows)
+}
+
+// GetReportTokenModelBreakdown (token, model) 二维聚合，给"key → 模型"下钻用。
+func GetReportTokenModelBreakdown(c *gin.Context) {
+	groupFilter := c.Query("group")
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+
+	if !isReportAdmin(c) && groupFilter == "" {
+		groupFilter = c.GetString("group")
+	}
+
+	rows, err := model.GetTokenModelBreakdown(startTimestamp, endTimestamp, groupFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rows)
+}
+
+// GetReportModelLatency 返回时间窗内按模型聚合的请求量 / 错误率 / 延迟分位。
+// 走 SQL + 内存分位计算，不受 /api/log 分页 pageSize<=100 的限制。
+func GetReportModelLatency(c *gin.Context) {
+	groupFilter := c.Query("group")
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+
+	if !isReportAdmin(c) && groupFilter == "" {
+		groupFilter = c.GetString("group")
+	}
+
+	rows, err := model.GetModelLatencyStats(startTimestamp, endTimestamp, groupFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rows)
+}
+
 func ExportReportCSV(c *gin.Context) {
 	groupFilter := c.Query("group")
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -138,6 +139,215 @@ func GetModelUserBreakdown(startTimestamp int64, endTimestamp int64, groupFilter
 		return nil, errors.New("查询统计数据失败")
 	}
 	return rows, nil
+}
+
+// TokenBreakdown 单把 API Key (token) 的使用聚合。
+// token_name 是用户手写、允许重名（多把 key 可能都叫 "default"），
+// 所以唯一标识必须是 token_id；token_name 只用来展示。
+type TokenBreakdown struct {
+	TokenId          int    `json:"token_id"`
+	TokenName        string `json:"token_name"`
+	UserId           int    `json:"user_id"`
+	Username         string `json:"username"`
+	Group            string `json:"group"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	FailCount        int    `json:"fail_count"`
+	LastUsedAt       int64  `json:"last_used_at"`
+}
+
+// GetTokenBreakdown 时间窗内按 token 聚合。显示"哪把 key 在烧钱 / 是否有被滥用"
+// 的关键视图：一个用户可能有多把 key（VSCode / iOS / 脚本各一把）。
+func GetTokenBreakdown(startTimestamp int64, endTimestamp int64, groupFilter string) ([]TokenBreakdown, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	query := LOG_DB.Table("logs").
+		Select(`logs.token_id, logs.token_name, logs.user_id, logs.username, logs.`+commonGroupCol+` as `+commonGroupCol+`,
+			sum(case when logs.type = ? then 1 else 0 end) as request_count,
+			sum(case when logs.type = ? then logs.prompt_tokens else 0 end) as prompt_tokens,
+			sum(case when logs.type = ? then logs.completion_tokens else 0 end) as completion_tokens,
+			sum(case when logs.type = ? then 1 else 0 end) as fail_count,
+			max(logs.created_at) as last_used_at`,
+			LogTypeConsume, LogTypeConsume, LogTypeConsume, LogTypeError).
+		Where("logs.type IN ? and logs.created_at >= ? and logs.created_at <= ?",
+			[]int{LogTypeConsume, LogTypeError}, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs."+commonGroupCol+" = ?", groupFilter)
+	}
+
+	query = query.Group("logs.token_id, logs.token_name, logs.user_id, logs.username, logs." + commonGroupCol)
+
+	var rows []TokenBreakdown
+	if err := query.Scan(&rows).Error; err != nil {
+		common.SysError("failed to query token breakdown: " + err.Error())
+		return nil, errors.New("查询 key 统计失败")
+	}
+	return rows, nil
+}
+
+// TokenModelBreakdown 单把 key 下每个模型的用量，供"key → 模型"下钻。
+type TokenModelBreakdown struct {
+	TokenId          int    `json:"token_id"`
+	TokenName        string `json:"token_name"`
+	UserId           int    `json:"user_id"`
+	Username         string `json:"username"`
+	ModelName        string `json:"model_name"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	FailCount        int    `json:"fail_count"`
+}
+
+// GetTokenModelBreakdown 时间窗内 (token, model) 聚合。
+// 用来回答 "admin 的 vscode key 本周用了哪些模型 / 占比如何"。
+func GetTokenModelBreakdown(startTimestamp int64, endTimestamp int64, groupFilter string) ([]TokenModelBreakdown, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	query := LOG_DB.Table("logs").
+		Select(`logs.token_id, logs.token_name, logs.user_id, logs.username, logs.model_name,
+			sum(case when logs.type = ? then 1 else 0 end) as request_count,
+			sum(case when logs.type = ? then logs.prompt_tokens else 0 end) as prompt_tokens,
+			sum(case when logs.type = ? then logs.completion_tokens else 0 end) as completion_tokens,
+			sum(case when logs.type = ? then 1 else 0 end) as fail_count`,
+			LogTypeConsume, LogTypeConsume, LogTypeConsume, LogTypeError).
+		Where("logs.type IN ? and logs.created_at >= ? and logs.created_at <= ?",
+			[]int{LogTypeConsume, LogTypeError}, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs."+commonGroupCol+" = ?", groupFilter)
+	}
+
+	query = query.Group("logs.token_id, logs.token_name, logs.user_id, logs.username, logs.model_name")
+
+	var rows []TokenModelBreakdown
+	if err := query.Scan(&rows).Error; err != nil {
+		common.SysError("failed to query token-model breakdown: " + err.Error())
+		return nil, errors.New("查询 key 模型分布失败")
+	}
+	return rows, nil
+}
+
+// ModelLatencyStat 单个模型的请求量 / 错误率 / 延迟分位。
+// Dashboard "模型错误率与延迟" 表直接吃这个结构。
+//
+// 精度说明：logs.use_time 字段单位是**整秒**，上游只记录到秒。
+// 所以这里返回的 *_ms 全是 1000 的倍数 —— 不是计算误差，是原始数据粒度。
+type ModelLatencyStat struct {
+	ModelName string `json:"model_name"`
+	Total     int    `json:"total"`
+	Error     int    `json:"error"`
+	P50Ms     int    `json:"p50_ms"`
+	P95Ms     int    `json:"p95_ms"`
+	P99Ms     int    `json:"p99_ms"`
+	AvgMs     int    `json:"avg_ms"`
+	MaxMs     int    `json:"max_ms"`
+}
+
+// GetModelLatencyStats 时间窗内按 model 聚合请求数 / 错误数 / 延迟分位。
+//
+// 不走 /api/log 分页是因为前端拉列表受 pageSize<=100 截断 ——
+// 10 条样本算分位毫无意义。这里一次性 SELECT 所有成功 / 失败日志的
+// (model, type, use_time) 三列到内存，按 model 分桶，Go 端排序取分位。
+//
+// 三列 + created_at 索引扫描，一天几万条量级完全 OK。
+// 失败日志(type=5)只计 error 计数，不进延迟样本（use_time 对失败无意义）。
+func GetModelLatencyStats(startTimestamp int64, endTimestamp int64, groupFilter string) ([]ModelLatencyStat, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	type row struct {
+		ModelName string
+		Type      int
+		UseTime   int64
+	}
+
+	query := LOG_DB.Table("logs").
+		Select("model_name, type, use_time").
+		Where("type IN ? and created_at >= ? and created_at <= ?",
+			[]int{LogTypeConsume, LogTypeError}, startTimestamp, endTimestamp)
+	if groupFilter != "" {
+		query = query.Where(commonGroupCol+" = ?", groupFilter)
+	}
+
+	var rows []row
+	if err := query.Scan(&rows).Error; err != nil {
+		common.SysError("failed to query model latency stats: " + err.Error())
+		return nil, errors.New("查询模型延迟失败")
+	}
+
+	type bucket struct {
+		total     int
+		errors    int
+		sumSec    int64
+		maxSec    int64
+		latencies []int64 // 秒
+	}
+	buckets := make(map[string]*bucket)
+	for _, r := range rows {
+		name := r.ModelName
+		if name == "" {
+			name = "unknown"
+		}
+		b := buckets[name]
+		if b == nil {
+			b = &bucket{}
+			buckets[name] = b
+		}
+		b.total++
+		if r.Type == LogTypeError {
+			b.errors++
+			continue
+		}
+		if r.UseTime > 0 {
+			b.latencies = append(b.latencies, r.UseTime)
+			b.sumSec += r.UseTime
+			if r.UseTime > b.maxSec {
+				b.maxSec = r.UseTime
+			}
+		}
+	}
+
+	percentile := func(sorted []int64, p float64) int {
+		if len(sorted) == 0 {
+			return 0
+		}
+		idx := int(float64(len(sorted)-1) * p)
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(sorted) {
+			idx = len(sorted) - 1
+		}
+		return int(sorted[idx]) * 1000
+	}
+
+	result := make([]ModelLatencyStat, 0, len(buckets))
+	for name, b := range buckets {
+		sort.Slice(b.latencies, func(i, j int) bool { return b.latencies[i] < b.latencies[j] })
+		var avgMs int
+		if n := len(b.latencies); n > 0 {
+			avgMs = int(b.sumSec*1000) / n
+		}
+		result = append(result, ModelLatencyStat{
+			ModelName: name,
+			Total:     b.total,
+			Error:     b.errors,
+			P50Ms:     percentile(b.latencies, 0.50),
+			P95Ms:     percentile(b.latencies, 0.95),
+			P99Ms:     percentile(b.latencies, 0.99),
+			AvgMs:     avgMs,
+			MaxMs:     int(b.maxSec) * 1000,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Total > result[j].Total })
+	return result, nil
 }
 
 // DailyStat 按日统计

@@ -335,6 +335,9 @@ func SetApiRouter(router *gin.Engine) {
 			reportRoute.GET("/by-user", observability.GetReportByUser)
 			reportRoute.GET("/model-user-breakdown", observability.GetReportModelUserBreakdown)
 			reportRoute.GET("/hourly-today", observability.GetReportHourlyToday)
+			reportRoute.GET("/model-latency", observability.GetReportModelLatency)
+			reportRoute.GET("/by-token", observability.GetReportByToken)
+			reportRoute.GET("/token-model-breakdown", observability.GetReportTokenModelBreakdown)
 			reportRoute.POST("/rollup", middleware.AdminAuth(), observability.TriggerReportRollup)
 		}
 		// Export route (no session auth needed, uses UserAuth)

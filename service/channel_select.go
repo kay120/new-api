@@ -169,6 +169,20 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}
+		// 分组继承 fallback：vip 查不到时按配置尝试 default / 其他。
+		// 只在第 0 次重试走一次 fallback，避免无限撞继承链。
+		if channel == nil && param.GetRetry() == 0 {
+			for _, fallbackGroup := range setting.GetGroupInheritanceChain(param.TokenGroup) {
+				fc, _ := model.GetRandomSatisfiedChannel(fallbackGroup, param.ModelName, 0)
+				if fc != nil {
+					logger.LogDebug(param.Ctx, "group %s has no channel for %s, fallback to %s",
+						param.TokenGroup, param.ModelName, fallbackGroup)
+					channel = fc
+					selectGroup = fallbackGroup
+					break
+				}
+			}
+		}
 	}
 	// 分组没找到渠道时，从 allowed_channels 补充查找（分组 + allowed_channels 取并集）
 	allowedChannels := common.GetContextKeyString(param.Ctx, constant.ContextKeyAllowedChannels)
