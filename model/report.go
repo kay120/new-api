@@ -38,6 +38,50 @@ type UserStat struct {
 	ModelCount       int    `json:"model_count"`
 }
 
+// ModelUserBreakdown 单条 (model, user) 聚合，供 Dashboard 明细面板使用。
+// 不依赖 /api/log 分页（会被 pageSize cap=100 截断）。
+type ModelUserBreakdown struct {
+	ModelName        string `json:"model_name"`
+	Username         string `json:"username"`
+	UserId           int    `json:"user_id"`
+	RequestCount     int    `json:"request_count"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	FailCount        int    `json:"fail_count"`
+}
+
+// GetModelUserBreakdown 返回时间窗内每个 (model_name, user_id) 组合的完整聚合，
+// 含成功 tokens / 失败次数。前端用来精确渲染"某模型的用户占比 / 某用户的模型占比"，
+// 避免依赖 /api/log 列表 + pageSize<=100 的片面样本。
+func GetModelUserBreakdown(startTimestamp int64, endTimestamp int64, groupFilter string) ([]ModelUserBreakdown, error) {
+	if startTimestamp == 0 || endTimestamp == 0 {
+		return nil, errors.New("start_timestamp and end_timestamp are required")
+	}
+
+	query := LOG_DB.Table("logs").
+		Select(`logs.model_name, logs.username, logs.user_id,
+			sum(case when logs.type = ? then 1 else 0 end) as request_count,
+			sum(case when logs.type = ? then logs.prompt_tokens else 0 end) as prompt_tokens,
+			sum(case when logs.type = ? then logs.completion_tokens else 0 end) as completion_tokens,
+			sum(case when logs.type = ? then 1 else 0 end) as fail_count`,
+			LogTypeConsume, LogTypeConsume, LogTypeConsume, LogTypeError).
+		Where("logs.type IN ? and logs.created_at >= ? and logs.created_at <= ?",
+			[]int{LogTypeConsume, LogTypeError}, startTimestamp, endTimestamp)
+
+	if groupFilter != "" {
+		query = query.Where("logs.group = ?", groupFilter)
+	}
+
+	query = query.Group("logs.model_name, logs.user_id, logs.username")
+
+	var rows []ModelUserBreakdown
+	if err := query.Scan(&rows).Error; err != nil {
+		common.SysError("failed to query model-user breakdown: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+	return rows, nil
+}
+
 // DailyStat 按日统计
 type DailyStat struct {
 	Date             string `json:"date"`

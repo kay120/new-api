@@ -333,6 +333,7 @@ func SetApiRouter(router *gin.Engine) {
 			reportRoute.GET("/by-group", observability.GetReportByGroup)
 			reportRoute.GET("/by-model", observability.GetReportByModel)
 			reportRoute.GET("/by-user", observability.GetReportByUser)
+			reportRoute.GET("/model-user-breakdown", observability.GetReportModelUserBreakdown)
 		}
 		// Export route (no session auth needed, uses UserAuth)
 		apiRouter.GET("/report/export", middleware.UserAuth(), observability.ExportReportCSV)

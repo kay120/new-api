@@ -80,6 +80,26 @@ func GetReportByUser(c *gin.Context) {
 	common.ApiSuccess(c, stats)
 }
 
+// GetReportModelUserBreakdown 返回时间窗内 (model, user) 完整聚合，
+// 前端 Dashboard 下钻面板用来精确渲染"模型×用户"占比，替代依赖
+// /api/log 列表（受 pageSize<=100 限制）拼出来的不精确数据。
+func GetReportModelUserBreakdown(c *gin.Context) {
+	groupFilter := c.Query("group")
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+
+	if !isReportAdmin(c) && groupFilter == "" {
+		groupFilter = c.GetString("group")
+	}
+
+	rows, err := model.GetModelUserBreakdown(startTimestamp, endTimestamp, groupFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rows)
+}
+
 func ExportReportCSV(c *gin.Context) {
 	groupFilter := c.Query("group")
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
